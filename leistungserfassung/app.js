@@ -307,6 +307,7 @@ function initSubTabGroup(panelSelector) {
       entryForm.note.value = "";
       entryItem.value = "";
       updateEntryQuantityConstraints();
+      refreshRequiredFieldStates();
       renderEntries();
     });
   }
@@ -1419,6 +1420,10 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
+
+
 
 
 
