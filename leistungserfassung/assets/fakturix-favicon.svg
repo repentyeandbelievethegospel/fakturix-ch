@@ -1,0 +1,10 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fakturix CH Favicon">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#0f766e"/>
+  <path d="M18 16h22l8 8v24H18z" fill="#fff"/>
+  <path d="M40 16v8h8" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(46 46)">
+    <circle r="10" fill="#b91c1c" stroke="#fff" stroke-width="2"/>
+    <rect x="-1.6" y="-5.6" width="3.2" height="11.2" rx="1" fill="#fff"/>
+    <rect x="-5.6" y="-1.6" width="11.2" height="3.2" rx="1" fill="#fff"/>
+  </g>
+</svg>

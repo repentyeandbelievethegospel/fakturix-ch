@@ -1,0 +1,331 @@
+﻿<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Fakturix CH Leistungserfassung</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/svg+xml" href="assets/fakturix-favicon.svg" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-title-row">
+      <img class="app-brand-logo" src="assets/fakturix-logo.svg" alt="Fakturix CH Logo" />
+      <h1>Fakturix CH Leistungserfassung</h1>
+    </div>
+    <p>Stammdaten und tägliche Leistungen mobil erfassen</p>
+    <br />
+  </header>
+
+  <main class="container">
+    <nav class="tabs tabs-main" role="tablist" aria-label="Hauptbereiche">
+      <button class="tab active" data-tab="erfassung" role="tab" aria-selected="true">Leistungserfassung</button>
+      <button class="tab" data-tab="stammdaten" role="tab" aria-selected="false">Stammdaten</button>
+      <button class="tab" data-tab="wartung" role="tab" aria-selected="false">Wartung</button>
+      <button class="tab" data-tab="einstellungen" role="tab" aria-selected="false">Einstellungen</button>
+      <button class="tab" data-tab="anleitung" role="tab" aria-selected="false">Anleitung</button>
+    </nav>
+
+    <section id="erfassung" class="panel active" role="tabpanel">
+      <h2>Leistungserfassung pro Kunde</h2>
+      <section class="subsection">
+        <h3>Leistung erfassen</h3>
+        <form id="entryForm" class="form-grid">
+          <label>Kunde suchen
+            <input id="entryCustomerSearch" type="text" list="customerSuggestions" placeholder="Name, Firma, Ort, PLZ..." autocomplete="off" required data-required-linked-id="entryCustomer" />
+            <datalist id="customerSuggestions"></datalist>
+          </label>
+          <label>Kunde ausgewählt
+            <input id="entryCustomerDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Kunde gewählt" />
+            <input type="hidden" name="customerId" id="entryCustomer" />
+          </label>
+          <label>Mitarbeiter suchen
+            <input id="entryEmployeeSearch" type="text" list="employeeSuggestions" placeholder="Name, Ort, PLZ..." autocomplete="off" required data-required-linked-id="entryEmployee" />
+            <datalist id="employeeSuggestions"></datalist>
+          </label>
+          <label>Mitarbeiter ausgewählt
+            <input id="entryEmployeeDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Mitarbeiter gewählt" />
+            <input type="hidden" name="employeeId" id="entryEmployee" />
+          </label>
+          <label>Dienstleistung / Produkt
+            <select name="itemId" id="entryItem" required></select>
+          </label>
+          <label>Datum
+            <input name="date" id="entryDate" type="date" required />
+          </label>
+          <label>Menge<input name="quantity" type="number" step="0.01" min="0.01" required /></label>
+          <label class="optional-indicator optional-ok">Notiz<input name="note" type="text" placeholder="Optional" /></label>
+          <button id="entrySubmitBtn" type="submit" class="primary" disabled>Erfassung speichern</button>
+        </form>
+      </section>
+      <section class="subsection">
+        <div id="entryList" class="list"></div>
+      </section>
+    </section>
+
+    <section id="stammdaten" class="panel" role="tabpanel" hidden>
+      <nav class="tabs tabs-sub" role="tablist" aria-label="Stammdaten">
+        <button class="subtab active" data-subtab="stamm-kunden" role="tab" aria-selected="true">Kunden</button>
+        <button class="subtab" data-subtab="stamm-mitarbeiter" role="tab" aria-selected="false">Mitarbeiter</button>
+        <button class="subtab" data-subtab="stamm-produkte" role="tab" aria-selected="false">Produkte</button>
+      </nav>
+
+      <section id="stamm-kunden" class="subpanel active" role="tabpanel">
+        <h2>Kunden</h2>
+        <section class="subsection">
+          <h3>Kunde erfassen</h3>
+          <form id="customerForm" class="form-grid customer-form">
+            <label>Firma<input name="company" type="text" /></label>
+            <div class="field-row">
+              <label>Vorname<input name="firstName" type="text" required /></label>
+              <label>Name<input name="lastName" type="text" required /></label>
+            </div>
+            <label>Strasse<input name="street" type="text" required /></label>
+            <div class="field-row">
+              <label>PLZ<input name="zip" type="text" required /></label>
+              <label>Ort<input name="city" type="text" required /></label>
+            </div>
+            <label>Telefon<input name="phone" type="tel" /></label>
+            <label>Email<input name="email" type="email" /></label>
+            <div class="actions">
+              <button id="customerSubmitBtn" type="submit" class="primary" disabled>Kunde speichern</button>
+              <button id="customerCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
+            </div>
+          </form>
+        </section>
+        <section class="subsection">
+          <h3>Meine Kunden</h3>
+          <label>Kunde suchen
+            <input id="customerSearch" type="search" placeholder="Name, Firma, Ort, PLZ, Tel, Email..." autocomplete="off" />
+          </label>
+          <div id="customerList" class="list"></div>
+        </section>
+      </section>
+
+      <section id="stamm-mitarbeiter" class="subpanel" role="tabpanel" hidden>
+        <h2>Mitarbeiter</h2>
+        <section class="subsection">
+          <h3>Mitarbeiter erfassen</h3>
+          <form id="employeeForm" class="form-grid customer-form">
+            <div class="field-row">
+              <label>Vorname<input name="firstName" type="text" required /></label>
+              <label>Name<input name="lastName" type="text" required /></label>
+            </div>
+            <label>Strasse<input name="street" type="text" required /></label>
+            <div class="field-row">
+              <label>PLZ<input name="zip" type="text" required /></label>
+              <label>Ort<input name="city" type="text" required /></label>
+            </div>
+            <label>Telefon<input name="phone" type="tel" /></label>
+            <label>Email<input name="email" type="email" /></label>
+            <label>IBAN<input name="iban" type="text" placeholder="CHxx xxxx xxxx xxxx xxxx x" /></label>
+            <label>Vereinbarter Stundenlohn (CHF)<input name="hourlyWage" type="number" step="0.01" min="0" required /></label>
+            <div class="actions">
+              <button id="employeeSubmitBtn" type="submit" class="primary" disabled>Mitarbeiter speichern</button>
+              <button id="employeeCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
+            </div>
+          </form>
+        </section>
+        <section class="subsection">
+          <h3>Meine Mitarbeiter</h3>
+          <label>Mitarbeiter suchen
+            <input id="employeeSearch" type="search" placeholder="Name, Ort, PLZ, Tel, Email..." autocomplete="off" />
+          </label>
+          <div id="employeeList" class="list"></div>
+        </section>
+      </section>
+
+      <section id="stamm-produkte" class="subpanel" role="tabpanel" hidden>
+        <h2>Produkte / Dienstleistungen</h2>
+        <section class="subsection">
+          <h3>Produkt / Dienstleistung erfassen</h3>
+          <form id="itemForm" class="form-grid">
+            <label>Bezeichnung<input name="name" type="text" required /></label>
+            <label>Typ
+              <select name="type" required>
+                <option value="Dienstleistung">Dienstleistung</option>
+                <option value="Produkt">Produkt</option>
+              </select>
+            </label>
+            <label>Einheit
+              <select name="unit" required>
+                <option value="Stunde/n">Stunde/n</option>
+                <option value="Stück">Stück</option>
+              </select>
+            </label>
+            <label>Preis pro Einheit (CHF)<input name="price" type="number" step="0.01" min="0" required /></label>
+            <div class="actions">
+              <button id="itemSubmitBtn" type="submit" class="primary" disabled>Eintrag speichern</button>
+              <button id="itemCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
+            </div>
+          </form>
+        </section>
+        <section class="subsection product-list-section">
+          <h3>Meine Produkte / Dienstleistungen</h3>
+          <label>Dienstleistungen/Produkte suchen
+            <input id="itemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis..." autocomplete="off" />
+          </label>
+          <div id="itemList" class="list"></div>
+        </section>
+      </section>
+    </section>
+
+    <section id="wartung" class="panel" role="tabpanel" hidden>
+      <nav class="tabs tabs-sub" role="tablist" aria-label="Wartung">
+        <button class="subtab active" data-subtab="wartung-export" role="tab" aria-selected="true">Export</button>
+        <button class="subtab" data-subtab="wartung-import" role="tab" aria-selected="false">Import</button>
+      </nav>
+
+      <section id="wartung-import" class="subpanel" role="tabpanel" hidden>
+        <h2>Datenimport</h2>
+        <p>Importiert eine zuvor exportierte JSON-Datei und ersetzt die aktuellen mobilen Daten.</p>
+        <label for="importFile">Export-Datei auswählen</label>
+        <input id="importFile" type="file" accept=".json,application/json" />
+        <button id="importBtn" class="secondary">Importieren (ersetzen)</button>
+        <p id="importStatus" class="status"></p>
+      </section>
+
+      <section id="wartung-export" class="subpanel active" role="tabpanel">
+        <h2>Datenexport</h2>
+        <p>Exportiert alle mobilen Daten (Kunden, Mitarbeiter, Dienstleistungen/Produkte, Erfassungen) als JSON-Datei.</p>
+        <button id="exportBtn" class="primary">Exportieren</button>
+        <section id="exportCleanupResult" class="cleanup-result" hidden>
+          <h3>Werden beim Export bereinigt</h3>
+          <div id="exportCleanupList" class="cleanup-result-list"></div>
+        </section>
+        <p id="exportStatus" class="status"></p>
+      </section>
+    </section>
+
+    <section id="einstellungen" class="panel" role="tabpanel" hidden>
+      <h2>Einstellungen</h2>
+      <form id="settingsForm" class="form-grid">
+        <label>Erfassungen aufbewahren (Monate)
+          <select id="retentionMonths" name="retentionMonths">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
+            <option value="11">11</option>
+            <option value="12">12</option>
+          </select>
+        </label>
+        <button type="submit" class="primary">Einstellungen speichern</button>
+      </form>
+      <p id="settingsStatus" class="status"></p>
+      <small>Beim Export werden Erfassungen älter als die gewählte Anzahl Monate automatisch gelöscht.</small>
+    </section>
+
+    <section id="anleitung" class="panel" role="tabpanel" hidden>
+      <h2>Anleitung Mobile App</h2>
+      <section class="subsection guide">
+        <h3>Allgemein</h3>
+        <p>Appzweck: Gratis mobile Stammdaten- und Leistungserfassung, lokal im Browser gespeichert, mit regelmässigem Export auf Google Drive oder iCloud.</p>
+        <p>Einmal monatlich werden in der Verrechnungs-Desktop-App Rechnungen mit Schweizer QR-Code generiert, Rechnungen monitoriert, Kontoauszüge importiert und Zahlungseingänge mit offenen Rechnungen abgeglichen.</p>
+        <p>Zusätzlich ist eine Stundenabrechnung pro Mitarbeiter möglich.</p>
+      </section>
+      <section class="subsection guide">
+        <h3>So ist die App gedacht</h3>
+        <ol>
+          <li>Zuerst unter <strong>Stammdaten</strong> alles einmalig erfassen: Kunden, Mitarbeiter, Produkte/Dienstleistungen.</li>
+          <li>Danach täglich unter <strong>Leistungserfassung</strong> pro Kunde/Mitarbeiter die Leistung mit Datum und Menge erfassen.</li>
+          <li>Monatsende: Export-Datei in der Desktop-App importieren und Rechnungen erstellen.</li>
+        </ol>
+      </section>
+
+      <section class="subsection guide">
+        <h3>Empfohlener Tagesablauf</h3>
+        <ol>
+          <li>Leistung erfassen direkt nach dem Einsatz.</li>
+          <li>Kurze Kontrolle der Tagesliste.</li>
+          <li>Am Tagesende Export ausführen und Datei sichern.</li>
+        </ol>
+      </section>
+
+      <section class="subsection guide guide-warning">
+        <h3>Wichtig: Regelmässig exportieren</h3>
+        <p><strong>Wichtig:</strong> Alle Daten werden im Local Storage des Browsers gespeichert und können bei Browser-Reset, App-/Browser-Update oder Gerätewechsel verloren gehen.</p>
+        <p>Exportiere die Daten regelmässig (am besten täglich) und speichere die Datei zusätzlich in einer Cloud, z.B. Google Drive.</p>
+        <p>Falls Daten verloren gehen, kann ein früherer Export über <strong>Wartung &gt; Import</strong> wieder importiert werden.</p>
+      </section>
+
+      <section class="subsection guide">
+        <h3>Import auf Desktop</h3>
+        <ol>
+          <li>In der Desktop-App im Tab <strong>Import</strong> die Export-Datei laden.</li>
+          <li>Nach dem Import Rechnungen für den gewünschten Monat erstellen.</li>
+          <li>Rechnungsjournal prüfen und bei Bedarf drucken/speichern.</li>
+        </ol>
+      </section>
+      <section class="subsection guide">
+        <h3>Flussdiagramm</h3>
+        <pre class="flow-diagram">
+[Stammdaten erfassen]
+Kunden | Mitarbeiter | Produkte
+            |
+            v
+[Tägliche Leistungserfassung]
+Kunde + Mitarbeiter + Produkt + Datum + Menge
+            |
+            v
+[Regelmässig exportieren]
+JSON-Datei speichern (z.B. Google Drive oder iCloud)
+            |
+            v
+[Monatlich Desktop-Import]
+Exportdatei importieren
+            |
+            v
+[Rechnungen generieren]
+pro Kunde / Monat mit Schweizer QR-Code
+            |
+            v
+[Rechnungsmonitoring & Abgleich]
+Kontoauszüge importieren, Zahlungseingänge abgleichen
+            |
+            v
+[Mitarbeiter-Stundenabrechnung]
+Stunden auswerten und abrechnen
+        </pre>
+      </section>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    Diese App ist kostenlos. Keine Garantie, keine Haftung. Verwendung auf eigenes Risiko. Alle Daten und Berechnungen immer selbst prüfen.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
