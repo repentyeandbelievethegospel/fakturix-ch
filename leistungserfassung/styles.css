@@ -450,3 +450,21 @@ button:disabled {
   padding-bottom: 0.35rem;
 }
 
+
+.entry-list-filter-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.55rem;
+  align-items: end;
+  margin-bottom: 0.35rem;
+}
+
+.entry-list-filter-label {
+  margin: 0;
+}
+
+#entryListCustomerClear {
+  min-width: 2.2rem;
+  padding-inline: 0.55rem;
+  line-height: 1;
+}

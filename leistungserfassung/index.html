@@ -55,10 +55,20 @@
           </label>
           <label>Menge<input name="quantity" type="number" step="0.01" min="0.01" required /></label>
           <label class="optional-indicator optional-ok">Notiz<input name="note" type="text" placeholder="Optional" /></label>
-          <button id="entrySubmitBtn" type="submit" class="primary" disabled>Erfassung speichern</button>
+          <div class="actions">
+            <button id="entrySubmitBtn" type="submit" class="primary" disabled>Erfassung speichern</button>
+            <button id="entryCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
+          </div>
         </form>
       </section>
       <section class="subsection">
+        <div id="entryListHeader"></div>
+        <div class="entry-list-filter-row">
+          <label class="entry-list-filter-label">Kunde suchen
+            <input id="entryListCustomerSearch" type="search" placeholder="Name, Firma, Ort, PLZ..." autocomplete="off" />
+          </label>
+          <button id="entryListCustomerClear" type="button" class="secondary" aria-label="Kundensuche zurücksetzen">X</button>
+        </div>
         <div id="entryList" class="list"></div>
       </section>
     </section>
@@ -95,9 +105,12 @@
         </section>
         <section class="subsection">
           <h3>Meine Kunden</h3>
-          <label>Kunde suchen
-            <input id="customerSearch" type="search" placeholder="Name, Firma, Ort, PLZ, Tel, Email..." autocomplete="off" />
-          </label>
+          <div class="entry-list-filter-row">
+            <label class="entry-list-filter-label">Kunde suchen
+              <input id="customerSearch" type="search" placeholder="Name, Firma, Ort, PLZ, Tel, Email..." autocomplete="off" />
+            </label>
+            <button id="customerSearchClear" type="button" class="secondary" aria-label="Kundensuche zurücksetzen">X</button>
+          </div>
           <div id="customerList" class="list"></div>
         </section>
       </section>
@@ -128,9 +141,12 @@
         </section>
         <section class="subsection">
           <h3>Meine Mitarbeiter</h3>
-          <label>Mitarbeiter suchen
-            <input id="employeeSearch" type="search" placeholder="Name, Ort, PLZ, Tel, Email..." autocomplete="off" />
-          </label>
+          <div class="entry-list-filter-row">
+            <label class="entry-list-filter-label">Mitarbeiter suchen
+              <input id="employeeSearch" type="search" placeholder="Name, Ort, PLZ, Tel, Email..." autocomplete="off" />
+            </label>
+            <button id="employeeSearchClear" type="button" class="secondary" aria-label="Mitarbeitersuche zurücksetzen">X</button>
+          </div>
           <div id="employeeList" class="list"></div>
         </section>
       </section>
@@ -162,9 +178,12 @@
         </section>
         <section class="subsection product-list-section">
           <h3>Meine Produkte / Dienstleistungen</h3>
-          <label>Dienstleistungen/Produkte suchen
-            <input id="itemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis..." autocomplete="off" />
-          </label>
+          <div class="entry-list-filter-row">
+            <label class="entry-list-filter-label">Dienstleistungen/Produkte suchen
+              <input id="itemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis..." autocomplete="off" />
+            </label>
+            <button id="itemSearchClear" type="button" class="secondary" aria-label="Produktsuche zurücksetzen">X</button>
+          </div>
           <div id="itemList" class="list"></div>
         </section>
       </section>
@@ -181,7 +200,7 @@
         <p>Importiert eine zuvor exportierte JSON-Datei und ersetzt die aktuellen mobilen Daten.</p>
         <label for="importFile">Export-Datei auswählen</label>
         <input id="importFile" type="file" accept=".json,application/json" />
-        <button id="importBtn" class="secondary">Importieren (ersetzen)</button>
+        <button id="importBtn" class="secondary" disabled>Importieren (ersetzen)</button>
         <p id="importStatus" class="status"></p>
       </section>
 
@@ -304,6 +323,14 @@ Stunden auswerten und abrechnen
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
 
 

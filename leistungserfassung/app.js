@@ -5,6 +5,7 @@ const state = loadState();
 let editingCustomerId = null;
 let editingEmployeeId = null;
 let editingItemId = null;
+let editingEntryId = null;
 let customerSuggestionMap = new Map();
 let employeeSuggestionMap = new Map();
 ensureCleaningServiceExists();
@@ -25,14 +26,21 @@ const employeeCancelBtn = document.getElementById("employeeCancelBtn");
 const itemSubmitBtn = document.getElementById("itemSubmitBtn");
 const itemCancelBtn = document.getElementById("itemCancelBtn");
 const entrySubmitBtn = document.getElementById("entrySubmitBtn");
+const entryCancelBtn = document.getElementById("entryCancelBtn");
 
 const customerList = document.getElementById("customerList");
 const customerSearch = document.getElementById("customerSearch");
+const customerSearchClear = document.getElementById("customerSearchClear");
 const employeeList = document.getElementById("employeeList");
 const employeeSearch = document.getElementById("employeeSearch");
+const employeeSearchClear = document.getElementById("employeeSearchClear");
 const itemList = document.getElementById("itemList");
 const itemSearch = document.getElementById("itemSearch");
+const itemSearchClear = document.getElementById("itemSearchClear");
+const entryListHeader = document.getElementById("entryListHeader");
 const entryList = document.getElementById("entryList");
+const entryListCustomerSearch = document.getElementById("entryListCustomerSearch");
+const entryListCustomerClear = document.getElementById("entryListCustomerClear");
 
 const entryCustomer = document.getElementById("entryCustomer");
 const entryCustomerDisplay = document.getElementById("entryCustomerDisplay");
@@ -237,10 +245,13 @@ function initSubTabGroup(panelSelector) {
   });
 
   itemCancelBtn.addEventListener("click", () => {
-    resetItemForm();
-  });
+      resetItemForm();
+    });
+    entryCancelBtn?.addEventListener("click", () => {
+      resetEntryForm();
+    });
 
-  entryDate.addEventListener("change", () => {
+    entryDate.addEventListener("change", () => {
     renderEntries();
   });
 
@@ -290,22 +301,43 @@ function initSubTabGroup(panelSelector) {
         entryForm.quantity.focus();
         return;
       }
-      const unitPrice = resolveEntryUnitPrice(item);
+
+      const existingEntry = editingEntryId ? state.entries.find((e) => e.id === editingEntryId) : null;
+      const resolvedUnitPrice = resolveEntryUnitPrice(item);
+      const unitPrice = existingEntry && existingEntry.itemId === data.itemId && existingEntry.unitPrice != null
+        ? existingEntry.unitPrice
+        : resolvedUnitPrice;
+
       const entry = {
-        id: generateId(),
+        id: editingEntryId || generateId(),
         customerId: data.customerId,
         employeeId: data.employeeId,
         itemId: data.itemId,
         date: data.date,
         quantity: item?.unit === "Stück" ? Math.trunc(quantity) : quantity,
         note: data.note?.trim() || "",
-      unitPrice
-    };
-    state.entries.push(entry);
+        unitPrice
+      };
+
+      if (editingEntryId) {
+        const index = state.entries.findIndex((e) => e.id === editingEntryId);
+        if (index >= 0) state.entries[index] = entry;
+        else state.entries.push(entry);
+      } else {
+        state.entries.push(entry);
+      }
+
       saveState();
       entryForm.quantity.value = "";
       entryForm.note.value = "";
       entryItem.value = "";
+      clearSelectedCustomer();
+      entryCustomerSearch.value = "";
+      clearSelectedEmployee();
+      entryEmployeeSearch.value = "";
+      renderCustomerSuggestions("");
+      renderEmployeeSuggestions("");
+      resetEntryForm();
       updateEntryQuantityConstraints();
       refreshRequiredFieldStates();
       renderEntries();
@@ -362,12 +394,17 @@ function wireCrudActions() {
   });
 
   entryList.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action][data-id]");
-    if (!button) return;
-    if (button.dataset.action === "delete-entry") {
-      deleteEntry(button.dataset.id);
-    }
-  });
+      const button = event.target.closest("button[data-action][data-id]");
+      if (!button) return;
+      const action = button.dataset.action;
+      if (action === "edit-entry") {
+        editEntry(button.dataset.id);
+        return;
+      }
+      if (action === "delete-entry") {
+        deleteEntry(button.dataset.id);
+      }
+    });
 }
 
 function wireExport() {
@@ -479,10 +516,26 @@ function wireSearch() {
   entryEmployeeSearch.addEventListener("focus", () => {
     renderEmployeeSuggestions(entryEmployeeSearch.value);
   });
+
+  entryListCustomerSearch?.addEventListener("input", () => {
+    renderEntries();
+  });
+  entryListCustomerClear?.addEventListener("click", () => {
+    if (entryListCustomerSearch) {
+      entryListCustomerSearch.value = "";
+      entryListCustomerSearch.focus();
+    }
+    renderEntries();
+  });
 }
 
 function wireCustomerSearch() {
   customerSearch.addEventListener("input", () => {
+    renderCustomers();
+  });
+  customerSearchClear?.addEventListener("click", () => {
+    customerSearch.value = "";
+    customerSearch.focus();
     renderCustomers();
   });
 }
@@ -491,15 +544,34 @@ function wireEmployeeSearch() {
   employeeSearch.addEventListener("input", () => {
     renderEmployees();
   });
+  employeeSearchClear?.addEventListener("click", () => {
+    employeeSearch.value = "";
+    employeeSearch.focus();
+    renderEmployees();
+  });
 }
 
 function wireItemSearch() {
   itemSearch.addEventListener("input", () => {
     renderItems();
   });
+  itemSearchClear?.addEventListener("click", () => {
+    itemSearch.value = "";
+    itemSearch.focus();
+    renderItems();
+  });
 }
 
 function wireImport() {
+  const syncImportButtonState = () => {
+    const hasFile = Boolean(importFile.files?.[0]);
+    importBtn.disabled = !hasFile;
+    importBtn.classList.toggle("primary", hasFile);
+    importBtn.classList.toggle("secondary", !hasFile);
+  };
+  importFile.addEventListener("change", syncImportButtonState);
+  syncImportButtonState();
+
   importBtn.addEventListener("click", async () => {
     try {
       const file = importFile.files?.[0];
@@ -541,6 +613,7 @@ function wireImport() {
 
       importStatus.textContent = `Import erfolgreich: ${state.customers.length} Kunden, ${state.employees.length} Mitarbeiter, ${state.items.length} Einträge, ${state.entries.length} Erfassungen.`;
       importFile.value = "";
+      syncImportButtonState();
     } catch (error) {
       importStatus.textContent = "Import fehlgeschlagen. Bitte eine gültige Export-Datei verwenden.";
       console.error(error);
@@ -567,6 +640,8 @@ function editCustomer(customerId) {
   customerSubmitBtn.textContent = "Kunde aktualisieren";
   customerCancelBtn.hidden = false;
   refreshRequiredFieldStates();
+  customerForm.firstName?.focus();
+  customerForm.firstName?.select();
 }
 
 function editEmployee(employeeId) {
@@ -591,6 +666,8 @@ function editEmployee(employeeId) {
   employeeSubmitBtn.textContent = "Mitarbeiter aktualisieren";
   employeeCancelBtn.hidden = false;
   refreshRequiredFieldStates();
+  employeeForm.firstName?.focus();
+  employeeForm.firstName?.select();
 }
 
 function deleteCustomer(customerId) {
@@ -642,6 +719,8 @@ function editItem(itemId) {
   itemSubmitBtn.textContent = "Eintrag aktualisieren";
   itemCancelBtn.hidden = false;
   refreshRequiredFieldStates();
+  itemForm.name?.focus();
+  itemForm.name?.select();
 }
 
 function deleteItem(itemId) {
@@ -663,10 +742,33 @@ function deleteItem(itemId) {
   renderAll();
 }
 
+function editEntry(entryId) {
+  const entry = state.entries.find((e) => e.id === entryId);
+  if (!entry) return;
+  setSelectedCustomer(entry.customerId);
+  setSelectedEmployee(entry.employeeId);
+  entryCustomerSearch.value = entryCustomerDisplay.value || "";
+  entryEmployeeSearch.value = entryEmployeeDisplay.value || "";
+  entryItem.value = String(entry.itemId || "");
+  entryDate.value = String(entry.date || entryDate.value || new Date().toISOString().slice(0, 10));
+  entryForm.quantity.value = String(entry.quantity ?? "");
+  entryForm.note.value = String(entry.note || "");
+  editingEntryId = entryId;
+  entrySubmitBtn.textContent = "Erfassung aktualisieren";
+  if (entryCancelBtn) entryCancelBtn.hidden = false;
+  updateEntryQuantityConstraints();
+  refreshRequiredFieldStates();
+  entryForm.quantity?.focus();
+  entryForm.quantity?.select();
+}
+
 function deleteEntry(entryId) {
   const confirmed = confirm("Erfasste Leistung löschen?");
   if (!confirmed) return;
   state.entries = state.entries.filter((e) => e.id !== entryId);
+  if (editingEntryId === entryId) {
+    resetEntryForm();
+  }
   saveState();
   renderEntries();
 }
@@ -694,6 +796,25 @@ function resetItemForm() {
   itemSubmitBtn.textContent = "Eintrag speichern";
   itemCancelBtn.hidden = true;
   refreshRequiredFieldStates();
+}
+
+function resetEntryForm() {
+  editingEntryId = null;
+  entrySubmitBtn.textContent = "Erfassung speichern";
+  if (entryCancelBtn) entryCancelBtn.hidden = true;
+  entryItem.value = "";
+  entryForm.quantity.value = "";
+  entryForm.note.value = "";
+  clearSelectedCustomer();
+  entryCustomerSearch.value = "";
+  clearSelectedEmployee();
+  entryEmployeeSearch.value = "";
+  renderCustomerSuggestions("");
+  renderEmployeeSuggestions("");
+  updateEntryQuantityConstraints();
+  refreshRequiredFieldStates();
+  entryForm.quantity?.focus();
+  entryForm.quantity?.select();
 }
 
 function normalizeImport(parsed) {
@@ -1067,20 +1188,47 @@ function renderEntries() {
   const heading = selectedDate
     ? `<h3 class="entry-day-title">Erfasste Leistungen für ${escapeHtml(weekday)}, ${escapeHtml(formatDateCH(selectedDate))}:</h3>`
     : `<h3 class="entry-day-title">Erfasste Leistungen</h3>`;
+  if (entryListHeader) {
+    entryListHeader.innerHTML = heading;
+  }
+
+  const customerFilterRaw = entryListCustomerSearch?.value?.trim() || "";
+  const customerFilter = normalizeSearchText(customerFilterRaw);
   const visibleEntries = selectedDate
     ? state.entries.filter((e) => e.date === selectedDate)
     : state.entries;
+  const filteredEntries = customerFilter
+    ? visibleEntries.filter((e) => {
+      const customer = state.customers.find((c) => c.id === e.customerId);
+      const haystack = normalizeSearchText([
+        customer?.company,
+        customer?.firstName,
+        customer?.lastName,
+        customer?.street,
+        customer?.zip,
+        customer?.city,
+        customer?.phone,
+        customer?.email
+      ].filter(Boolean).join(" "));
+      return haystack.includes(customerFilter);
+    })
+    : visibleEntries;
 
-  if (!visibleEntries.length) {
+  if (!filteredEntries.length) {
     if (selectedDate) {
-      entryList.innerHTML = `${heading}<small>Keine Erfassungen für ${escapeHtml(formatDateCH(selectedDate))} vorhanden.</small>`;
+      const filterSuffix = customerFilter ? ` mit Kundenfilter "${escapeHtml(customerFilterRaw)}"` : "";
+      entryList.innerHTML = `<small>Keine Erfassungen für ${escapeHtml(formatDateCH(selectedDate))}${filterSuffix} vorhanden.</small>`;
       return;
     }
-    entryList.innerHTML = `${heading}<small>Noch keine Erfassungen vorhanden.</small>`;
+    if (customerFilter) {
+      entryList.innerHTML = `<small>Keine Erfassungen für Kundenfilter "${escapeHtml(customerFilterRaw)}" vorhanden.</small>`;
+      return;
+    }
+    entryList.innerHTML = `<small>Noch keine Erfassungen vorhanden.</small>`;
     return;
   }
 
-  const sortedEntries = visibleEntries
+  const sortedEntries = filteredEntries
     .slice()
     .sort((a, b) => a.customerId.localeCompare(b.customerId));
 
@@ -1100,21 +1248,22 @@ function renderEntries() {
   const listHtml = [...groups.values()]
     .map((group) => {
       const cards = group.entries
-          .map((e) => {
-            const item = state.items.find((i) => i.id === e.itemId);
-            const employee = state.employees.find((emp) => emp.id === e.employeeId);
-            const itemName = item ? item.name : "Unbekannter Eintrag";
-            const employeeName = employee ? `${employee.firstName || ""} ${employee.lastName || ""}`.trim() : "Unbekannter Mitarbeiter";
-            const unitPrice = e.unitPrice != null ? e.unitPrice : resolveEntryUnitPrice(item);
-            const total = unitPrice * e.quantity;
-            return `
-              <article class="card">
-                <p class="entry-main">${escapeHtml(itemName)} | ${e.quantity} ${escapeHtml(item?.unit || "")}</p>
-                <p class="entry-sub">${escapeHtml(formatDateCH(e.date))} | MA: ${escapeHtml(employeeName)} | Ans.: ${formatCurrency(unitPrice)} | Total: ${formatCurrency(total)}${e.note ? ` | ${escapeHtml(e.note)}` : ""}</p>
-                <div class="card-actions">
-                  <button type="button" class="danger" data-action="delete-entry" data-id="${escapeHtml(e.id)}">Löschen</button>
-                </div>
-              </article>
+        .map((e) => {
+          const item = state.items.find((i) => i.id === e.itemId);
+          const employee = state.employees.find((emp) => emp.id === e.employeeId);
+          const itemName = item ? item.name : "Unbekannter Eintrag";
+          const employeeName = employee ? `${employee.firstName || ""} ${employee.lastName || ""}`.trim() : "Unbekannter Mitarbeiter";
+          const unitPrice = e.unitPrice != null ? e.unitPrice : resolveEntryUnitPrice(item);
+          const total = unitPrice * e.quantity;
+          return `
+            <article class="card">
+              <p class="entry-main">${escapeHtml(itemName)} | ${e.quantity} ${escapeHtml(item?.unit || "")}</p>
+              <p class="entry-sub">${escapeHtml(formatDateCH(e.date))} | MA: ${escapeHtml(employeeName)} | Ans.: ${formatCurrency(unitPrice)} | Total: ${formatCurrency(total)}${e.note ? ` | ${escapeHtml(e.note)}` : ""}</p>
+              <div class="card-actions">
+                <button type="button" class="secondary" data-action="edit-entry" data-id="${escapeHtml(e.id)}">Bearbeiten</button>
+                <button type="button" class="danger" data-action="delete-entry" data-id="${escapeHtml(e.id)}">Löschen</button>
+              </div>
+            </article>
           `;
         })
         .join("");
@@ -1127,7 +1276,8 @@ function renderEntries() {
       `;
     })
     .join("");
-  entryList.innerHTML = `${heading}${listHtml}`;
+
+  entryList.innerHTML = listHtml;
 }
 function setDefaultDate() {
   entryDate.value = new Date().toISOString().slice(0, 10);
@@ -1420,6 +1570,36 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
