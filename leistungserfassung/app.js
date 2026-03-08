@@ -63,6 +63,8 @@ const importFile = document.getElementById("importFile");
 const importStatus = document.getElementById("importStatus");
 const retentionMonths = document.getElementById("retentionMonths");
 const settingsStatus = document.getElementById("settingsStatus");
+const flashMessage = document.getElementById("flashMessage");
+let flashMessageTimeoutId = null;
 
 setDefaultDate();
 wireTabs();
@@ -100,6 +102,16 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function showFlashMessage(message) {
+  if (!flashMessage) return;
+  flashMessage.textContent = String(message || "");
+  flashMessage.hidden = false;
+  if (flashMessageTimeoutId) clearTimeout(flashMessageTimeoutId);
+  flashMessageTimeoutId = setTimeout(() => {
+    flashMessage.hidden = true;
+  }, 1800);
 }
 
 function wireTabs() {
@@ -154,21 +166,22 @@ function initSubTabGroup(panelSelector) {
   });
 }
 
-  function wireForms() {
+function wireForms() {
   customerForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = formToObject(customerForm);
+    const isEditingCustomer = Boolean(editingCustomerId);
 
-      const customer = {
-        id: editingCustomerId || generateId(),
-        company: data.company?.trim() || "",
-        firstName: data.firstName.trim(),
-        lastName: data.lastName.trim(),
-        street: data.street?.trim() || "",
-        zip: data.zip.trim(),
-        city: data.city.trim(),
-        phone: data.phone?.trim() || "",
-        email: data.email?.trim() || ""
+    const customer = {
+      id: editingCustomerId || generateId(),
+      company: data.company?.trim() || "",
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      street: data.street?.trim() || "",
+      zip: data.zip.trim(),
+      city: data.city.trim(),
+      phone: data.phone?.trim() || "",
+      email: data.email?.trim() || ""
     };
 
     if (editingCustomerId) {
@@ -181,48 +194,52 @@ function initSubTabGroup(panelSelector) {
     resetCustomerForm();
     saveState();
     renderAll();
+    showFlashMessage(isEditingCustomer ? "Kunde aktualisiert." : "Kunde gespeichert.");
   });
 
-    customerCancelBtn.addEventListener("click", () => {
-      resetCustomerForm();
-    });
+  customerCancelBtn.addEventListener("click", () => {
+    resetCustomerForm();
+  });
 
-    employeeForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const data = formToObject(employeeForm);
+  employeeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = formToObject(employeeForm);
+    const isEditingEmployee = Boolean(editingEmployeeId);
 
-      const employee = {
-        id: editingEmployeeId || generateId(),
-        firstName: data.firstName.trim(),
-        lastName: data.lastName.trim(),
-        street: data.street?.trim() || "",
-        zip: data.zip.trim(),
-        city: data.city.trim(),
-        phone: data.phone?.trim() || "",
-        email: data.email?.trim() || "",
-        iban: data.iban?.trim() || "",
-        hourlyWage: parseAmount(data.hourlyWage)
-      };
+    const employee = {
+      id: editingEmployeeId || generateId(),
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      street: data.street?.trim() || "",
+      zip: data.zip.trim(),
+      city: data.city.trim(),
+      phone: data.phone?.trim() || "",
+      email: data.email?.trim() || "",
+      iban: data.iban?.trim() || "",
+      hourlyWage: parseAmount(data.hourlyWage)
+    };
 
-      if (editingEmployeeId) {
-        const index = state.employees.findIndex((e) => e.id === editingEmployeeId);
-        if (index >= 0) state.employees[index] = employee;
-      } else {
-        state.employees.push(employee);
-      }
+    if (editingEmployeeId) {
+      const index = state.employees.findIndex((e) => e.id === editingEmployeeId);
+      if (index >= 0) state.employees[index] = employee;
+    } else {
+      state.employees.push(employee);
+    }
 
-      resetEmployeeForm();
-      saveState();
-      renderAll();
-    });
+    resetEmployeeForm();
+    saveState();
+    renderAll();
+    showFlashMessage(isEditingEmployee ? "Mitarbeiter aktualisiert." : "Mitarbeiter gespeichert.");
+  });
 
-    employeeCancelBtn.addEventListener("click", () => {
-      resetEmployeeForm();
-    });
+  employeeCancelBtn.addEventListener("click", () => {
+    resetEmployeeForm();
+  });
 
   itemForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = formToObject(itemForm);
+    const isEditingItem = Boolean(editingItemId);
 
     const item = {
       id: editingItemId || generateId(),
@@ -242,16 +259,18 @@ function initSubTabGroup(panelSelector) {
     resetItemForm();
     saveState();
     renderAll();
+    showFlashMessage(isEditingItem ? "Produkt/Dienstleistung aktualisiert." : "Produkt/Dienstleistung gespeichert.");
   });
 
   itemCancelBtn.addEventListener("click", () => {
-      resetItemForm();
-    });
-    entryCancelBtn?.addEventListener("click", () => {
-      resetEntryForm();
-    });
+    resetItemForm();
+  });
 
-    entryDate.addEventListener("change", () => {
+  entryCancelBtn?.addEventListener("click", () => {
+    resetEntryForm();
+  });
+
+  entryDate.addEventListener("change", () => {
     renderEntries();
   });
 
@@ -262,12 +281,14 @@ function initSubTabGroup(panelSelector) {
   entryItem.addEventListener("change", () => {
     updateEntryQuantityConstraints();
   });
+
   entryQuantityInput?.addEventListener("keydown", (event) => {
     if (!isPieceUnitSelected()) return;
     if ([".", ",", "e", "E", "+", "-"].includes(event.key)) {
       event.preventDefault();
     }
   });
+
   entryQuantityInput?.addEventListener("input", () => {
     if (!isPieceUnitSelected()) return;
     const raw = String(entryQuantityInput.value || "");
@@ -275,75 +296,76 @@ function initSubTabGroup(panelSelector) {
     entryQuantityInput.value = digitsOnly;
   });
 
-    entryForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const data = formToObject(entryForm);
-      if (!data.customerId) {
-        alert("Bitte zuerst einen Kunden auswählen.");
-        return;
-      }
-      if (!data.employeeId) {
-        alert("Bitte zuerst einen Mitarbeiter auswählen.");
-        return;
-      }
-      if (!data.itemId) {
-        alert("Bitte eine Dienstleistung / ein Produkt auswählen.");
-        return;
-      }
-      const item = state.items.find((i) => i.id === data.itemId);
-      const quantity = Number(data.quantity);
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        alert("Bitte eine gueltige Menge eingeben.");
-        return;
-      }
-      if (item?.unit === "Stück" && !Number.isInteger(quantity)) {
-        alert("Bei Einheit 'Stück' sind nur ganze Zahlen erlaubt.");
-        entryForm.quantity.focus();
-        return;
-      }
+  entryForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = formToObject(entryForm);
+    const isEditingEntry = Boolean(editingEntryId);
+    if (!data.customerId) {
+      alert("Bitte zuerst einen Kunden auswählen.");
+      return;
+    }
+    if (!data.employeeId) {
+      alert("Bitte zuerst einen Mitarbeiter auswählen.");
+      return;
+    }
+    if (!data.itemId) {
+      alert("Bitte eine Dienstleistung / ein Produkt auswählen.");
+      return;
+    }
+    const item = state.items.find((i) => i.id === data.itemId);
+    const quantity = Number(data.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert("Bitte eine gueltige Menge eingeben.");
+      return;
+    }
+    if (item?.unit === "Stück" && !Number.isInteger(quantity)) {
+      alert("Bei Einheit 'Stück' sind nur ganze Zahlen erlaubt.");
+      entryForm.quantity.focus();
+      return;
+    }
 
-      const existingEntry = editingEntryId ? state.entries.find((e) => e.id === editingEntryId) : null;
-      const resolvedUnitPrice = resolveEntryUnitPrice(item);
-      const unitPrice = existingEntry && existingEntry.itemId === data.itemId && existingEntry.unitPrice != null
-        ? existingEntry.unitPrice
-        : resolvedUnitPrice;
+    const existingEntry = editingEntryId ? state.entries.find((e) => e.id === editingEntryId) : null;
+    const resolvedUnitPrice = resolveEntryUnitPrice(item);
+    const unitPrice = existingEntry && existingEntry.itemId === data.itemId && existingEntry.unitPrice != null
+      ? existingEntry.unitPrice
+      : resolvedUnitPrice;
 
-      const entry = {
-        id: editingEntryId || generateId(),
-        customerId: data.customerId,
-        employeeId: data.employeeId,
-        itemId: data.itemId,
-        date: data.date,
-        quantity: item?.unit === "Stück" ? Math.trunc(quantity) : quantity,
-        note: data.note?.trim() || "",
-        unitPrice
-      };
+    const entry = {
+      id: editingEntryId || generateId(),
+      customerId: data.customerId,
+      employeeId: data.employeeId,
+      itemId: data.itemId,
+      date: data.date,
+      quantity: item?.unit === "Stück" ? Math.trunc(quantity) : quantity,
+      note: data.note?.trim() || "",
+      unitPrice
+    };
 
-      if (editingEntryId) {
-        const index = state.entries.findIndex((e) => e.id === editingEntryId);
-        if (index >= 0) state.entries[index] = entry;
-        else state.entries.push(entry);
-      } else {
-        state.entries.push(entry);
-      }
+    if (editingEntryId) {
+      const index = state.entries.findIndex((e) => e.id === editingEntryId);
+      if (index >= 0) state.entries[index] = entry;
+      else state.entries.push(entry);
+    } else {
+      state.entries.push(entry);
+    }
 
-      saveState();
-      entryForm.quantity.value = "";
-      entryForm.note.value = "";
-      entryItem.value = "";
-      clearSelectedCustomer();
-      entryCustomerSearch.value = "";
-      clearSelectedEmployee();
-      entryEmployeeSearch.value = "";
-      renderCustomerSuggestions("");
-      renderEmployeeSuggestions("");
-      resetEntryForm();
-      updateEntryQuantityConstraints();
-      refreshRequiredFieldStates();
-      renderEntries();
-    });
-  }
-
+    saveState();
+    entryForm.quantity.value = "";
+    entryForm.note.value = "";
+    entryItem.value = "";
+    clearSelectedCustomer();
+    entryCustomerSearch.value = "";
+    clearSelectedEmployee();
+    entryEmployeeSearch.value = "";
+    renderCustomerSuggestions("");
+    renderEmployeeSuggestions("");
+    resetEntryForm();
+    updateEntryQuantityConstraints();
+    refreshRequiredFieldStates();
+    renderEntries();
+    showFlashMessage(isEditingEntry ? "Leistung aktualisiert." : "Leistung gespeichert.");
+  });
+}
 function wireCrudActions() {
   customerList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action][data-id]");
@@ -520,6 +542,7 @@ function wireSearch() {
   entryListCustomerSearch?.addEventListener("input", () => {
     renderEntries();
   });
+
   entryListCustomerClear?.addEventListener("click", () => {
     if (entryListCustomerSearch) {
       entryListCustomerSearch.value = "";
@@ -528,7 +551,6 @@ function wireSearch() {
     renderEntries();
   });
 }
-
 function wireCustomerSearch() {
   customerSearch.addEventListener("input", () => {
     renderCustomers();
@@ -1570,6 +1592,13 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
+
+
+
+
+
 
 
 

@@ -468,3 +468,33 @@ button:disabled {
   padding-inline: 0.55rem;
   line-height: 1;
 }
+
+
+.flash-message {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  width: min(92vw, 520px);
+  padding: 0.95rem 1rem;
+  border: 1px solid #22c55e;
+  background: #ecfdf3;
+  color: #14532d;
+  border-radius: 0.7rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  box-shadow: 0 14px 30px rgba(15, 118, 110, 0.28);
+}
+
+
+#entryListCustomerClear,
+#customerSearchClear,
+#employeeSearchClear,
+#itemSearchClear {
+  min-width: 2.2rem;
+  padding-inline: 0.55rem;
+  line-height: 1;
+}
+
