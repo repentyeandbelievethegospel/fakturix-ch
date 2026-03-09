@@ -433,6 +433,7 @@ function wireExport() {
   exportBtn.addEventListener("click", async () => {
     const removedEntries = pruneOldEntriesForExport();
     const removedCount = removedEntries.length;
+    const retentionMonthsCount = normalizeMonths(state?.settings?.retentionMonths);
       const payload = {
         app: "Fakturix CH Leistungserfassung",
         exportedAt: new Date().toISOString(),
@@ -468,7 +469,7 @@ function wireExport() {
                 text: "Export der mobilen Erfassungsdaten",
                 files: [file]
               });
-                exportStatus.textContent = `Export über Teilen-Menü erfolgreich. Alte Erfassungen gelöscht: ${removedCount}.`;
+                exportStatus.textContent = `Export über Teilen-Menü erfolgreich. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}.`;
               renderExportCleanupPreview();
               return;
             } catch (shareError) {
@@ -478,7 +479,7 @@ function wireExport() {
         }
 
         downloadBlob(blob, fileName);
-        exportStatus.textContent = `Datei "${fileName}" wurde heruntergeladen oder zum Speichern angeboten. Alte Erfassungen gelöscht: ${removedCount}.`;
+        exportStatus.textContent = `Datei "${fileName}" wurde heruntergeladen oder zum Speichern angeboten. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}.`;
         renderExportCleanupPreview();
       } catch (error) {
         exportStatus.textContent = "Export wurde abgebrochen oder ist fehlgeschlagen.";
@@ -1593,6 +1594,8 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
 
 
 
