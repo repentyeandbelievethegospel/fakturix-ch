@@ -37,7 +37,7 @@
             <input id="entryCustomerSearch" type="text" list="customerSuggestions" placeholder="Name, Firma, Ort, PLZ..." autocomplete="off" required data-required-linked-id="entryCustomer" />
             <datalist id="customerSuggestions"></datalist>
           </label>
-          <label>Kunde ausgewählt
+          <label id="entryCustomerSelectedRow">Kunde ausgewählt
             <input id="entryCustomerDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Kunde gewählt" />
             <input type="hidden" name="customerId" id="entryCustomer" />
           </label>
@@ -45,7 +45,7 @@
             <input id="entryEmployeeSearch" type="text" list="employeeSuggestions" placeholder="Name, Ort, PLZ..." autocomplete="off" required data-required-linked-id="entryEmployee" />
             <datalist id="employeeSuggestions"></datalist>
           </label>
-          <label>Mitarbeiter ausgewählt
+          <label id="entryEmployeeSelectedRow">Mitarbeiter ausgewählt
             <input id="entryEmployeeDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Mitarbeiter gewählt" />
             <input type="hidden" name="employeeId" id="entryEmployee" />
           </label>
@@ -325,6 +325,9 @@ Stunden auswerten und abrechnen
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
 
 
 

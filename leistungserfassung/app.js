@@ -363,7 +363,7 @@ function wireForms() {
     updateEntryQuantityConstraints();
     refreshRequiredFieldStates();
     renderEntries();
-    showFlashMessage(isEditingEntry ? "Leistung aktualisiert." : "Leistung gespeichert.");
+    showFlashMessage("Erfassung gespeichert");
   });
 }
 function wireCrudActions() {
@@ -769,7 +769,8 @@ function editEntry(entryId) {
   if (!entry) return;
   setSelectedCustomer(entry.customerId);
   setSelectedEmployee(entry.employeeId);
-  entryCustomerSearch.value = entryCustomerDisplay.value || "";
+  const editCustomer = state.customers.find((c) => c.id === entry.customerId);
+  entryCustomerSearch.value = editCustomer ? getCustomerDisplay(editCustomer) : "";
   entryEmployeeSearch.value = entryEmployeeDisplay.value || "";
   entryItem.value = String(entry.itemId || "");
   entryDate.value = String(entry.date || entryDate.value || new Date().toISOString().slice(0, 10));
@@ -1592,6 +1593,10 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
+
+
 
 
 
