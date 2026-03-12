@@ -470,6 +470,7 @@ function wireExport() {
                 files: [file]
               });
                 exportStatus.textContent = `Export über Teilen-Menü erfolgreich. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}.`;
+                showFlashMessage("Export war erfolgreich");
               renderExportCleanupPreview();
               return;
             } catch (shareError) {
@@ -480,6 +481,7 @@ function wireExport() {
 
         downloadBlob(blob, fileName);
         exportStatus.textContent = `Datei "${fileName}" wurde heruntergeladen oder zum Speichern angeboten. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}.`;
+        showFlashMessage("Export war erfolgreich");
         renderExportCleanupPreview();
       } catch (error) {
         exportStatus.textContent = "Export wurde abgebrochen oder ist fehlgeschlagen.";
@@ -495,6 +497,7 @@ function wireSettings() {
     state.settings.retentionMonths = normalizeMonths(retentionMonths.value);
     saveState();
     settingsStatus.textContent = `Gespeichert: Erfassungen werden ${state.settings.retentionMonths} Monate aufbewahrt.`;
+    showFlashMessage("Einstellungen gespeichert");
     renderExportCleanupPreview();
   });
 }
@@ -635,6 +638,7 @@ function wireImport() {
       renderAll();
 
       importStatus.textContent = `Import erfolgreich: ${state.customers.length} Kunden, ${state.employees.length} Mitarbeiter, ${state.items.length} Einträge, ${state.entries.length} Erfassungen.`;
+        showFlashMessage("Import war erfolgreich");
       importFile.value = "";
       syncImportButtonState();
     } catch (error) {
@@ -1594,6 +1598,7 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
 
 
 
