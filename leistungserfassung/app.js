@@ -5,6 +5,8 @@ const state = loadState();
 let editingCustomerId = null;
 let editingEmployeeId = null;
 let editingItemId = null;
+let editingUnitId = null;
+let editingProductTypeId = null;
 let editingEntryId = null;
 let customerSuggestionMap = new Map();
 let employeeSuggestionMap = new Map();
@@ -16,6 +18,8 @@ const panels = [...document.querySelectorAll(".panel")];
 const customerForm = document.getElementById("customerForm");
 const employeeForm = document.getElementById("employeeForm");
 const itemForm = document.getElementById("itemForm");
+const unitForm = document.getElementById("unitForm");
+const productTypeForm = document.getElementById("productTypeForm");
 const entryForm = document.getElementById("entryForm");
 const settingsForm = document.getElementById("settingsForm");
 
@@ -25,6 +29,10 @@ const employeeSubmitBtn = document.getElementById("employeeSubmitBtn");
 const employeeCancelBtn = document.getElementById("employeeCancelBtn");
 const itemSubmitBtn = document.getElementById("itemSubmitBtn");
 const itemCancelBtn = document.getElementById("itemCancelBtn");
+const unitSubmitBtn = document.getElementById("unitSubmitBtn");
+const unitCancelBtn = document.getElementById("unitCancelBtn");
+const productTypeSubmitBtn = document.getElementById("productTypeSubmitBtn");
+const productTypeCancelBtn = document.getElementById("productTypeCancelBtn");
 const entrySubmitBtn = document.getElementById("entrySubmitBtn");
 const entryCancelBtn = document.getElementById("entryCancelBtn");
 
@@ -37,6 +45,12 @@ const employeeSearchClear = document.getElementById("employeeSearchClear");
 const itemList = document.getElementById("itemList");
 const itemSearch = document.getElementById("itemSearch");
 const itemSearchClear = document.getElementById("itemSearchClear");
+const unitList = document.getElementById("unitList");
+const unitSearch = document.getElementById("unitSearch");
+const unitSearchClear = document.getElementById("unitSearchClear");
+const productTypeList = document.getElementById("productTypeList");
+const productTypeSearch = document.getElementById("productTypeSearch");
+const productTypeSearchClear = document.getElementById("productTypeSearchClear");
 const entryListHeader = document.getElementById("entryListHeader");
 const entryList = document.getElementById("entryList");
 const entryListCustomerSearch = document.getElementById("entryListCustomerSearch");
@@ -53,6 +67,8 @@ const employeeSuggestions = document.getElementById("employeeSuggestions");
 const entryItem = document.getElementById("entryItem");
 const entryDate = document.getElementById("entryDate");
 const entryQuantityInput = entryForm.querySelector('input[name="quantity"]');
+const itemTypeSelect = document.getElementById("itemType");
+const itemUnitSelect = document.getElementById("itemUnit");
 
 const exportBtn = document.getElementById("exportBtn");
 const exportStatus = document.getElementById("exportStatus");
@@ -63,6 +79,8 @@ const importFile = document.getElementById("importFile");
 const importStatus = document.getElementById("importStatus");
 const retentionMonths = document.getElementById("retentionMonths");
 const settingsStatus = document.getElementById("settingsStatus");
+const resetConfirmCheckbox = document.getElementById("resetConfirmCheckbox");
+const resetDataBtn = document.getElementById("resetDataBtn");
 const flashMessage = document.getElementById("flashMessage");
 let flashMessageTimeoutId = null;
 
@@ -77,27 +95,74 @@ wireSearch();
 wireCustomerSearch();
 wireEmployeeSearch();
 wireItemSearch();
+wireUnitSearch();
+wireProductTypeSearch();
 wireSettings();
+wireResetConfirmation();
 wireRequiredFieldStates();
 renderAll();
 
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!saved) return { customers: [], employees: [], items: [], entries: [], settings: { retentionMonths: 12 } };
+    if (!saved) return normalizeStateData({ customers: [], employees: [], items: [], entries: [], units: [], productTypes: [], settings: { retentionMonths: 12 } });
     const parsed = JSON.parse(saved);
-    return {
-      customers: Array.isArray(parsed.customers) ? parsed.customers : [],
-      employees: Array.isArray(parsed.employees) ? parsed.employees : [],
-      items: Array.isArray(parsed.items) ? parsed.items : [],
-      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-      settings: {
-        retentionMonths: normalizeMonths(parsed?.settings?.retentionMonths)
-      }
-    };
+    return normalizeStateData(parsed);
   } catch {
-    return { customers: [], employees: [], items: [], entries: [], settings: { retentionMonths: 12 } };
+    return normalizeStateData({ customers: [], employees: [], items: [], entries: [], units: [], productTypes: [], settings: { retentionMonths: 12 } });
   }
+}
+
+function normalizeStateData(parsed) {
+  const customers = Array.isArray(parsed?.customers) ? parsed.customers : [];
+  const employees = Array.isArray(parsed?.employees) ? parsed.employees : [];
+
+  const units = normalizeNamedCatalog(Array.isArray(parsed?.units) ? parsed.units : [], "Einheit");
+  const productTypes = normalizeNamedCatalog(Array.isArray(parsed?.productTypes) ? parsed.productTypes : [], "Produkttyp");
+
+  ensureCatalogContains(units, "Stunde/n");
+  ensureCatalogContains(units, "Stück");
+  ensureCatalogContains(productTypes, "Dienstleistung");
+  ensureCatalogContains(productTypes, "Produkt");
+
+  const items = (Array.isArray(parsed?.items) ? parsed.items : []).map((item) => {
+    const normalized = {
+      id: item?.id || generateId(),
+      name: String(item?.name || ""),
+      price: Number(item?.price) || 0,
+      typeId: String(item?.typeId || ""),
+      unitId: String(item?.unitId || ""),
+      type: String(item?.type || ""),
+      unit: String(item?.unit || "")
+    };
+
+    if (!normalized.typeId || !productTypes.some((t) => t.id === normalized.typeId)) {
+      const fallbackType = normalizeCatalogName(normalized.type) || "Dienstleistung";
+      normalized.typeId = ensureCatalogContains(productTypes, fallbackType).id;
+    }
+    if (!normalized.unitId || !units.some((u) => u.id === normalized.unitId)) {
+      const fallbackUnit = normalizeCatalogName(normalized.unit) || "Stunde/n";
+      normalized.unitId = ensureCatalogContains(units, fallbackUnit).id;
+    }
+
+    normalized.type = getCatalogNameById(productTypes, normalized.typeId) || normalizeCatalogName(normalized.type) || "Dienstleistung";
+    normalized.unit = getCatalogNameById(units, normalized.unitId) || normalizeCatalogName(normalized.unit) || "Stunde/n";
+    return normalized;
+  });
+
+  const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+
+  return {
+    customers,
+    employees,
+    items,
+    entries,
+    units,
+    productTypes,
+    settings: {
+      retentionMonths: normalizeMonths(parsed?.settings?.retentionMonths)
+    }
+  };
 }
 
 function saveState() {
@@ -240,12 +305,18 @@ function wireForms() {
     event.preventDefault();
     const data = formToObject(itemForm);
     const isEditingItem = Boolean(editingItemId);
+    const typeId = String(data.typeId || "");
+    const unitId = String(data.unitId || "");
+    const typeName = getCatalogNameById(state.productTypes, typeId) || "Dienstleistung";
+    const unitName = getCatalogNameById(state.units, unitId) || "Stunde/n";
 
     const item = {
       id: editingItemId || generateId(),
       name: data.name.trim(),
-      type: data.type,
-      unit: data.unit.trim(),
+      typeId,
+      unitId,
+      type: typeName,
+      unit: unitName,
       price: Number(data.price)
     };
 
@@ -264,6 +335,72 @@ function wireForms() {
 
   itemCancelBtn.addEventListener("click", () => {
     resetItemForm();
+  });
+
+  unitForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = formToObject(unitForm);
+    const name = normalizeCatalogName(data.name);
+    if (!name) return;
+    const isEditing = Boolean(editingUnitId);
+
+    if (editingUnitId) {
+      const index = state.units.findIndex((u) => u.id === editingUnitId);
+      if (index >= 0) state.units[index] = { ...state.units[index], name };
+      state.items.forEach((item) => {
+        if (item.unitId === editingUnitId) item.unit = name;
+      });
+    } else {
+      const existing = findCatalogByName(state.units, name);
+      if (existing) {
+        unitForm.name.value = existing.name;
+        refreshRequiredFieldStates();
+        return;
+      }
+      state.units.push({ id: generateId(), name });
+    }
+
+    resetUnitForm();
+    saveState();
+    renderAll();
+    showFlashMessage(isEditing ? "Einheit aktualisiert." : "Einheit gespeichert.");
+  });
+
+  unitCancelBtn?.addEventListener("click", () => {
+    resetUnitForm();
+  });
+
+  productTypeForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = formToObject(productTypeForm);
+    const name = normalizeCatalogName(data.name);
+    if (!name) return;
+    const isEditing = Boolean(editingProductTypeId);
+
+    if (editingProductTypeId) {
+      const index = state.productTypes.findIndex((t) => t.id === editingProductTypeId);
+      if (index >= 0) state.productTypes[index] = { ...state.productTypes[index], name };
+      state.items.forEach((item) => {
+        if (item.typeId === editingProductTypeId) item.type = name;
+      });
+    } else {
+      const existing = findCatalogByName(state.productTypes, name);
+      if (existing) {
+        productTypeForm.name.value = existing.name;
+        refreshRequiredFieldStates();
+        return;
+      }
+      state.productTypes.push({ id: generateId(), name });
+    }
+
+    resetProductTypeForm();
+    saveState();
+    renderAll();
+    showFlashMessage(isEditing ? "Produkttyp aktualisiert." : "Produkttyp gespeichert.");
+  });
+
+  productTypeCancelBtn?.addEventListener("click", () => {
+    resetProductTypeForm();
   });
 
   entryCancelBtn?.addEventListener("click", () => {
@@ -318,7 +455,7 @@ function wireForms() {
       alert("Bitte eine gueltige Menge eingeben.");
       return;
     }
-    if (item?.unit === "Stück" && !Number.isInteger(quantity)) {
+    if (getItemUnitName(item) === "Stück" && !Number.isInteger(quantity)) {
       alert("Bei Einheit 'Stück' sind nur ganze Zahlen erlaubt.");
       entryForm.quantity.focus();
       return;
@@ -336,7 +473,7 @@ function wireForms() {
       employeeId: data.employeeId,
       itemId: data.itemId,
       date: data.date,
-      quantity: item?.unit === "Stück" ? Math.trunc(quantity) : quantity,
+      quantity: getItemUnitName(item) === "Stück" ? Math.trunc(quantity) : quantity,
       note: data.note?.trim() || "",
       unitPrice
     };
@@ -399,7 +536,7 @@ function wireCrudActions() {
       }
     });
 
-  itemList.addEventListener("click", (event) => {
+    itemList.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action][data-id]");
     if (!button) return;
     const itemId = button.dataset.id;
@@ -412,6 +549,36 @@ function wireCrudActions() {
 
     if (action === "delete") {
       deleteItem(itemId);
+    }
+  });
+
+  unitList?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-id]");
+    if (!button) return;
+    const unitId = button.dataset.id;
+    const action = button.dataset.action;
+
+    if (action === "edit") {
+      editUnit(unitId);
+      return;
+    }
+    if (action === "delete") {
+      deleteUnit(unitId);
+    }
+  });
+
+  productTypeList?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-id]");
+    if (!button) return;
+    const typeId = button.dataset.id;
+    const action = button.dataset.action;
+
+    if (action === "edit") {
+      editProductType(typeId);
+      return;
+    }
+    if (action === "delete") {
+      deleteProductType(typeId);
     }
   });
 
@@ -434,12 +601,18 @@ function wireExport() {
     const removedEntries = pruneOldEntriesForExport();
     const removedCount = removedEntries.length;
     const retentionMonthsCount = normalizeMonths(state?.settings?.retentionMonths);
-      const payload = {
+            const payload = {
         app: "Fakturix CH Leistungserfassung",
         exportedAt: new Date().toISOString(),
         customers: state.customers,
         employees: state.employees,
-        items: state.items,
+        units: state.units,
+        productTypes: state.productTypes,
+        items: state.items.map((item) => ({
+          ...item,
+          type: getItemTypeName(item),
+          unit: getItemUnitName(item)
+        })),
         entries: state.entries,
         settings: state.settings
       };
@@ -499,6 +672,54 @@ function wireSettings() {
     settingsStatus.textContent = `Gespeichert: Erfassungen werden ${state.settings.retentionMonths} Monate aufbewahrt.`;
     showFlashMessage("Einstellungen gespeichert");
     renderExportCleanupPreview();
+  });
+}
+
+function wireResetConfirmation() {
+  if (!resetDataBtn || !resetConfirmCheckbox) return;
+
+  const syncState = () => {
+    resetDataBtn.disabled = !resetConfirmCheckbox.checked;
+  };
+
+  ["change", "input", "click"].forEach((eventName) => {
+    resetConfirmCheckbox.addEventListener(eventName, syncState);
+  });
+  syncState();
+
+  resetDataBtn.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (resetDataBtn.disabled) return;
+
+    if (!confirm("Alle Daten in der mobilen App löschen?")) return;
+    if (!confirm("Sind Sie wirklich sicher?")) return;
+
+    state.customers = [];
+    state.employees = [];
+    state.items = [];
+    state.entries = [];
+    state.units = [];
+    state.productTypes = [];
+    state.settings = { retentionMonths: 12 };
+    ensureCleaningServiceExists();
+
+    resetCustomerForm();
+    resetEmployeeForm();
+    resetItemForm();
+    resetUnitForm();
+    resetProductTypeForm();
+    resetEntryForm();
+    saveState();
+    renderAll();
+
+    if (importFile) importFile.value = "";
+    importStatus.textContent = "";
+    exportStatus.textContent = "";
+    settingsStatus.textContent = "Alle Daten wurden gelöscht.";
+    showFlashMessage("Alle Daten wurden gelöscht");
+
+    resetConfirmCheckbox.checked = false;
+    syncState();
   });
 }
 
@@ -588,6 +809,32 @@ function wireItemSearch() {
   });
 }
 
+function wireUnitSearch() {
+  unitSearch?.addEventListener("input", () => {
+    renderUnits();
+  });
+  unitSearchClear?.addEventListener("click", () => {
+    if (unitSearch) {
+      unitSearch.value = "";
+      unitSearch.focus();
+    }
+    renderUnits();
+  });
+}
+
+function wireProductTypeSearch() {
+  productTypeSearch?.addEventListener("input", () => {
+    renderProductTypes();
+  });
+  productTypeSearchClear?.addEventListener("click", () => {
+    if (productTypeSearch) {
+      productTypeSearch.value = "";
+      productTypeSearch.focus();
+    }
+    renderProductTypes();
+  });
+}
+
 function wireImport() {
   const syncImportButtonState = () => {
     const hasFile = Boolean(importFile.files?.[0]);
@@ -628,12 +875,16 @@ function wireImport() {
         state.employees = normalized.employees;
         state.items = normalized.items;
         state.entries = normalized.entries;
+        state.units = normalized.units;
+        state.productTypes = normalized.productTypes;
         state.settings = normalized.settings;
         ensureCleaningServiceExists();
 
       resetCustomerForm();
       resetEmployeeForm();
       resetItemForm();
+      resetUnitForm();
+      resetProductTypeForm();
       saveState();
       renderAll();
 
@@ -738,8 +989,10 @@ function editItem(itemId) {
   if (!item) return;
 
   itemForm.name.value = item.name || "";
-  itemForm.type.value = item.type || "Dienstleistung";
-  itemForm.unit.value = item.unit === "Stück" ? "Stück" : "Stunde/n";
+  const typeId = String(item.typeId || findOrCreateCatalogByName(state.productTypes, item.type || "Dienstleistung").id);
+  const unitId = String(item.unitId || findOrCreateCatalogByName(state.units, item.unit || "Stunde/n").id);
+  if (itemTypeSelect) itemTypeSelect.value = typeId;
+  if (itemUnitSelect) itemUnitSelect.value = unitId;
   itemForm.price.value = String(item.price ?? "");
 
   editingItemId = itemId;
@@ -765,6 +1018,90 @@ function deleteItem(itemId) {
     resetItemForm();
   }
 
+  saveState();
+  renderAll();
+}
+
+function editUnit(unitId) {
+  const unit = state.units.find((u) => u.id === unitId);
+  if (!unit || !unitForm) return;
+
+  unitForm.name.value = unit.name || "";
+  editingUnitId = unitId;
+  unitSubmitBtn.textContent = "Einheit aktualisieren";
+  if (unitCancelBtn) unitCancelBtn.hidden = false;
+  refreshRequiredFieldStates();
+  unitForm.name?.focus();
+  unitForm.name?.select();
+}
+
+function deleteUnit(unitId) {
+  const unit = state.units.find((u) => u.id === unitId);
+  if (!unit) return;
+
+  const isDefault = ["Stunde/n", "Stück"].includes(unit.name);
+  if (isDefault) {
+    alert("Standard-Einheiten können nicht gelöscht werden.");
+    return;
+  }
+
+  const affectedItems = state.items.filter((i) => i.unitId === unitId);
+  const affectedItemIds = new Set(affectedItems.map((i) => i.id));
+  const affectedEntries = state.entries.filter((e) => affectedItemIds.has(e.itemId));
+
+  const confirmed = confirm(
+    `Einheit löschen? Betroffene Produkte: ${affectedItems.length}, betroffene Erfassungen: ${affectedEntries.length}.`
+  );
+  if (!confirmed) return;
+
+  state.units = state.units.filter((u) => u.id !== unitId);
+  state.items = state.items.filter((i) => i.unitId !== unitId);
+  state.entries = state.entries.filter((e) => !affectedItemIds.has(e.itemId));
+  ensureCleaningServiceExists();
+
+  if (editingUnitId === unitId) resetUnitForm();
+  saveState();
+  renderAll();
+}
+
+function editProductType(typeId) {
+  const type = state.productTypes.find((t) => t.id === typeId);
+  if (!type || !productTypeForm) return;
+
+  productTypeForm.name.value = type.name || "";
+  editingProductTypeId = typeId;
+  productTypeSubmitBtn.textContent = "Produkttyp aktualisieren";
+  if (productTypeCancelBtn) productTypeCancelBtn.hidden = false;
+  refreshRequiredFieldStates();
+  productTypeForm.name?.focus();
+  productTypeForm.name?.select();
+}
+
+function deleteProductType(typeId) {
+  const type = state.productTypes.find((t) => t.id === typeId);
+  if (!type) return;
+
+  const isDefault = ["Dienstleistung", "Produkt"].includes(type.name);
+  if (isDefault) {
+    alert("Standard-Produkttypen können nicht gelöscht werden.");
+    return;
+  }
+
+  const affectedItems = state.items.filter((i) => i.typeId === typeId);
+  const affectedItemIds = new Set(affectedItems.map((i) => i.id));
+  const affectedEntries = state.entries.filter((e) => affectedItemIds.has(e.itemId));
+
+  const confirmed = confirm(
+    `Produkttyp löschen? Betroffene Produkte: ${affectedItems.length}, betroffene Erfassungen: ${affectedEntries.length}.`
+  );
+  if (!confirmed) return;
+
+  state.productTypes = state.productTypes.filter((t) => t.id !== typeId);
+  state.items = state.items.filter((i) => i.typeId !== typeId);
+  state.entries = state.entries.filter((e) => !affectedItemIds.has(e.itemId));
+  ensureCleaningServiceExists();
+
+  if (editingProductTypeId === typeId) resetProductTypeForm();
   saveState();
   renderAll();
 }
@@ -820,9 +1157,32 @@ function resetEmployeeForm() {
 function resetItemForm() {
   editingItemId = null;
   itemForm.reset();
-  itemForm.unit.value = "Stunde/n";
+  if (itemTypeSelect) {
+    const defaultType = findOrCreateCatalogByName(state.productTypes, "Dienstleistung");
+    itemTypeSelect.value = defaultType?.id || "";
+  }
+  if (itemUnitSelect) {
+    const defaultUnit = findOrCreateCatalogByName(state.units, "Stunde/n");
+    itemUnitSelect.value = defaultUnit?.id || "";
+  }
   itemSubmitBtn.textContent = "Eintrag speichern";
   itemCancelBtn.hidden = true;
+  refreshRequiredFieldStates();
+}
+
+function resetUnitForm() {
+  editingUnitId = null;
+  if (unitForm) unitForm.reset();
+  if (unitSubmitBtn) unitSubmitBtn.textContent = "Einheit speichern";
+  if (unitCancelBtn) unitCancelBtn.hidden = true;
+  refreshRequiredFieldStates();
+}
+
+function resetProductTypeForm() {
+  editingProductTypeId = null;
+  if (productTypeForm) productTypeForm.reset();
+  if (productTypeSubmitBtn) productTypeSubmitBtn.textContent = "Produkttyp speichern";
+  if (productTypeCancelBtn) productTypeCancelBtn.hidden = true;
   refreshRequiredFieldStates();
 }
 
@@ -850,6 +1210,8 @@ function normalizeImport(parsed) {
   const importedEmployees = Array.isArray(parsed?.employees) ? parsed.employees : [];
   const importedItems = Array.isArray(parsed?.items) ? parsed.items : [];
   const importedEntries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+  const importedUnits = Array.isArray(parsed?.units) ? parsed.units : [];
+  const importedProductTypes = Array.isArray(parsed?.productTypes) ? parsed.productTypes : [];
 
   const customers = importedCustomers.map((c) => ({
     id: c?.id || generateId(),
@@ -863,13 +1225,37 @@ function normalizeImport(parsed) {
     email: String(c?.email || "")
   }));
 
-  const items = importedItems.map((i) => ({
-    id: i?.id || generateId(),
-    name: String(i?.name || ""),
-    type: i?.type === "Produkt" ? "Produkt" : "Dienstleistung",
-    unit: i?.unit === "Stück" ? "Stück" : "Stunde/n",
-    price: Number(i?.price) || 0
-  }));
+  const units = normalizeNamedCatalog(importedUnits, "Einheit");
+  const productTypes = normalizeNamedCatalog(importedProductTypes, "Produkttyp");
+  ensureCatalogContains(units, "Stunde/n");
+  ensureCatalogContains(units, "Stück");
+  ensureCatalogContains(productTypes, "Dienstleistung");
+  ensureCatalogContains(productTypes, "Produkt");
+
+  const items = importedItems.map((i) => {
+    const typeName = normalizeCatalogName(i?.type) || "Dienstleistung";
+    const unitName = normalizeCatalogName(i?.unit) || "Stunde/n";
+    const typeId = String(i?.typeId || "");
+    const unitId = String(i?.unitId || "");
+
+    const resolvedTypeId = typeId && productTypes.some((t) => t.id === typeId)
+      ? typeId
+      : ensureCatalogContains(productTypes, typeName).id;
+
+    const resolvedUnitId = unitId && units.some((u) => u.id === unitId)
+      ? unitId
+      : ensureCatalogContains(units, unitName).id;
+
+    return {
+      id: i?.id || generateId(),
+      name: String(i?.name || ""),
+      typeId: resolvedTypeId,
+      unitId: resolvedUnitId,
+      type: getCatalogNameById(productTypes, resolvedTypeId) || typeName,
+      unit: getCatalogNameById(units, resolvedUnitId) || unitName,
+      price: Number(i?.price) || 0
+    };
+  });
 
   const employees = importedEmployees.map((e) => ({
     id: e?.id || generateId(),
@@ -909,7 +1295,7 @@ function normalizeImport(parsed) {
     retentionMonths: normalizeMonths(parsed?.settings?.retentionMonths)
   };
 
-  return { customers, employees, items, entries, settings };
+  return { customers, employees, items, entries, units, productTypes, settings };
 }
 
 function downloadBlob(blob, fileName) {
@@ -926,7 +1312,10 @@ function downloadBlob(blob, fileName) {
 function renderAll() {
   renderCustomers();
   renderEmployees();
+  renderUnits();
+  renderProductTypes();
   renderItems();
+  renderItemTypeUnitSelects();
   renderEntrySelects();
   renderEntries();
   renderSettings();
@@ -1003,6 +1392,8 @@ function syncEntrySubmitButtonState() {
   if (customerSubmitBtn) customerSubmitBtn.disabled = !isFormReadyForSubmit(customerForm);
   if (employeeSubmitBtn) employeeSubmitBtn.disabled = !isFormReadyForSubmit(employeeForm);
   if (itemSubmitBtn) itemSubmitBtn.disabled = !isFormReadyForSubmit(itemForm);
+  if (unitSubmitBtn) unitSubmitBtn.disabled = !isFormReadyForSubmit(unitForm);
+  if (productTypeSubmitBtn) productTypeSubmitBtn.disabled = !isFormReadyForSubmit(productTypeForm);
 }
 function setDisplayFieldState(field, isValid) {
   if (!field) return;
@@ -1109,6 +1500,94 @@ function renderEmployees() {
     .join("");
 }
 
+function renderUnits() {
+  if (!unitList) return;
+  if (!state.units.length) {
+    unitList.innerHTML = "<small>Noch keine Einheiten erfasst.</small>";
+    return;
+  }
+
+  const query = normalizeSearchText(unitSearch?.value);
+  const visible = state.units.filter((u) => {
+    if (!query) return true;
+    return normalizeSearchText(u.name).includes(query);
+  });
+
+  if (!visible.length) {
+    unitList.innerHTML = "<small>Keine Einheiten passend zur Suche gefunden.</small>";
+    return;
+  }
+
+  unitList.innerHTML = visible
+    .map((u) => `
+      <article class="card">
+        <strong>${escapeHtml(u.name)}</strong>
+        <div class="card-actions">
+          <button type="button" class="secondary" data-action="edit" data-id="${escapeHtml(u.id)}">Bearbeiten</button>
+          <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(u.id)}">Löschen</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
+function renderProductTypes() {
+  if (!productTypeList) return;
+  if (!state.productTypes.length) {
+    productTypeList.innerHTML = "<small>Noch keine Produkttypen erfasst.</small>";
+    return;
+  }
+
+  const query = normalizeSearchText(productTypeSearch?.value);
+  const visible = state.productTypes.filter((t) => {
+    if (!query) return true;
+    return normalizeSearchText(t.name).includes(query);
+  });
+
+  if (!visible.length) {
+    productTypeList.innerHTML = "<small>Keine Produkttypen passend zur Suche gefunden.</small>";
+    return;
+  }
+
+  productTypeList.innerHTML = visible
+    .map((t) => `
+      <article class="card">
+        <strong>${escapeHtml(t.name)}</strong>
+        <div class="card-actions">
+          <button type="button" class="secondary" data-action="edit" data-id="${escapeHtml(t.id)}">Bearbeiten</button>
+          <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(t.id)}">Löschen</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
+function renderItemTypeUnitSelects() {
+  if (itemTypeSelect) {
+    const previousTypeId = itemTypeSelect.value;
+    itemTypeSelect.innerHTML = state.productTypes
+      .map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.name)}</option>`)
+      .join("");
+    if (state.productTypes.some((type) => type.id === previousTypeId)) {
+      itemTypeSelect.value = previousTypeId;
+    } else {
+      itemTypeSelect.value = findOrCreateCatalogByName(state.productTypes, "Dienstleistung").id;
+    }
+  }
+
+  if (itemUnitSelect) {
+    const previousUnitId = itemUnitSelect.value;
+    itemUnitSelect.innerHTML = state.units
+      .map((unit) => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`)
+      .join("");
+    if (state.units.some((unit) => unit.id === previousUnitId)) {
+      itemUnitSelect.value = previousUnitId;
+    } else {
+      itemUnitSelect.value = findOrCreateCatalogByName(state.units, "Stunde/n").id;
+    }
+  }
+}
+
 function renderItems() {
   if (!state.items.length) {
     itemList.innerHTML = "<small>Noch keine Dienstleistungen/Produkte erfasst.</small>";
@@ -1120,8 +1599,8 @@ function renderItems() {
     if (!query) return true;
     const haystack = normalizeSearchText([
       i.name,
-      i.type,
-      i.unit,
+      getItemTypeName(i),
+      getItemUnitName(i),
       String(i.price)
     ].join(" "));
     return haystack.includes(query);
@@ -1137,7 +1616,7 @@ function renderItems() {
       (i) => `
       <article class="card">
         <strong>${escapeHtml(i.name)}</strong>
-        <small>${escapeHtml(i.type)} | ${formatCurrency(i.price)} / ${escapeHtml(i.unit)}</small>
+        <small>${escapeHtml(getItemTypeName(i))} | ${formatCurrency(i.price)} / ${escapeHtml(getItemUnitName(i))}</small>
         <div class="card-actions">
           <button type="button" class="secondary" data-action="edit" data-id="${escapeHtml(i.id)}">Bearbeiten</button>
           <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(i.id)}">Löschen</button>
@@ -1199,7 +1678,7 @@ function updateEntryQuantityConstraints() {
 
 function isPieceUnitSelected() {
   const selectedItem = state.items.find((item) => item.id === entryItem.value);
-  return selectedItem?.unit === "Stück";
+  return getItemUnitName(selectedItem) === "Stück";
 }
 
 function resetEntryCustomerSelection() {
@@ -1285,7 +1764,7 @@ function renderEntries() {
           const total = unitPrice * e.quantity;
           return `
             <article class="card">
-              <p class="entry-main">${escapeHtml(itemName)} | ${e.quantity} ${escapeHtml(item?.unit || "")}</p>
+              <p class="entry-main">${escapeHtml(itemName)} | ${e.quantity} ${escapeHtml(getItemUnitName(item))}</p>
               <p class="entry-sub">${escapeHtml(formatDateCH(e.date))} | MA: ${escapeHtml(employeeName)} | Ans.: ${formatCurrency(unitPrice)} | Total: ${formatCurrency(total)}${e.note ? ` | ${escapeHtml(e.note)}` : ""}</p>
               <div class="card-actions">
                 <button type="button" class="secondary" data-action="edit-entry" data-id="${escapeHtml(e.id)}">Bearbeiten</button>
@@ -1486,6 +1965,68 @@ function normalizeSearchText(value) {
     .replace(/\s+/g, " ");
 }
 
+function normalizeCatalogName(value) {
+  return String(value || "").trim();
+}
+
+function normalizeNamedCatalog(values, fallbackPrefix) {
+  const list = [];
+  const seen = new Set();
+  for (const raw of values || []) {
+    const name = normalizeCatalogName(raw?.name || raw?.label || raw);
+    if (!name) continue;
+    const key = normalizeSearchText(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    list.push({ id: String(raw?.id || generateId()), name });
+  }
+  if (!list.length && fallbackPrefix) {
+    list.push({ id: generateId(), name: fallbackPrefix });
+  }
+  return list;
+}
+
+function findCatalogByName(list, name) {
+  const key = normalizeSearchText(name);
+  return (list || []).find((item) => normalizeSearchText(item.name) === key) || null;
+}
+
+function ensureCatalogContains(list, name) {
+  const normalized = normalizeCatalogName(name);
+  let found = findCatalogByName(list, normalized);
+  if (!found) {
+    found = { id: generateId(), name: normalized };
+    list.push(found);
+  }
+  return found;
+}
+
+function findOrCreateCatalogByName(list, name) {
+  return ensureCatalogContains(list, name);
+}
+
+function getCatalogNameById(list, id) {
+  return (list || []).find((item) => item.id === id)?.name || "";
+}
+
+function getItemTypeName(item) {
+  if (!item) return "";
+  if (item.typeId) {
+    const resolved = getCatalogNameById(state.productTypes, item.typeId);
+    if (resolved) return resolved;
+  }
+  return normalizeCatalogName(item.type);
+}
+
+function getItemUnitName(item) {
+  if (!item) return "";
+  if (item.unitId) {
+    const resolved = getCatalogNameById(state.units, item.unitId);
+    if (resolved) return resolved;
+  }
+  return normalizeCatalogName(item.unit);
+}
+
 function setSelectedCustomer(customerId) {
   const customer = state.customers.find((c) => c.id === customerId);
   if (!customer) {
@@ -1521,13 +2062,31 @@ function clearSelectedEmployee() {
 }
 
 function ensureCleaningServiceExists() {
+  ensureCatalogContains(state.units, "Stunde/n");
+  ensureCatalogContains(state.units, "Stück");
+  ensureCatalogContains(state.productTypes, "Dienstleistung");
+  ensureCatalogContains(state.productTypes, "Produkt");
+
   const exists = state.items.some((item) => normalizeSearchText(item.name) === normalizeSearchText("Reinigungsarbeiten"));
-  if (exists) return;
+  if (exists) {
+    state.items.forEach((item) => {
+      item.typeId = item.typeId || findOrCreateCatalogByName(state.productTypes, item.type || "Dienstleistung").id;
+      item.unitId = item.unitId || findOrCreateCatalogByName(state.units, item.unit || "Stunde/n").id;
+      item.type = getItemTypeName(item);
+      item.unit = getItemUnitName(item);
+    });
+    return;
+  }
+
+  const defaultType = findOrCreateCatalogByName(state.productTypes, "Dienstleistung");
+  const defaultUnit = findOrCreateCatalogByName(state.units, "Stunde/n");
   state.items.push({
     id: generateId(),
     name: "Reinigungsarbeiten",
-    type: "Dienstleistung",
-    unit: "Stunde/n",
+    typeId: defaultType.id,
+    unitId: defaultUnit.id,
+    type: defaultType.name,
+    unit: defaultUnit.name,
     price: 35
   });
   saveState();
@@ -1586,7 +2145,7 @@ function renderExportCleanupResult(entries) {
       const item = state.items.find((i) => i.id === entry.itemId);
       const customerName = customer ? getCustomerDisplay(customer) : "Unbekannter Kunde";
       const itemLabel = item ? item.name : "Unbekannte Leistung";
-      const unit = item?.unit || "";
+      const unit = getItemUnitName(item);
       const qty = Number(entry.quantity) || 0;
       return `
         <article class="cleanup-result-row">
@@ -1598,6 +2157,44 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -282,6 +282,29 @@ button.danger {
   flex: 1;
 }
 
+.settings-reset-block {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+
+.settings-reset-block h3 {
+  margin: 0 0 0.55rem;
+}
+
+.reset-confirm-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.7rem;
+}
+
+.reset-confirm-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0;
+}
+
 .status {
   color: var(--muted);
 }
@@ -544,4 +567,5 @@ button:disabled {
 #itemList {
   min-height: 45vh;
 }
+
 
