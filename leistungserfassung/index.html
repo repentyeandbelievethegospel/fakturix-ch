@@ -49,8 +49,13 @@
             <input id="entryEmployeeDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Mitarbeiter gewählt" />
             <input type="hidden" name="employeeId" id="entryEmployee" />
           </label>
-          <label>Dienstleistung / Produkt
-            <select name="itemId" id="entryItem" required></select>
+          <label>Produkt suchen
+            <input id="entryItemSearch" type="text" list="itemSuggestions" placeholder="Produkt / Dienstleistung suchen..." autocomplete="off" required data-required-linked-id="entryItem" />
+            <datalist id="itemSuggestions"></datalist>
+          </label>
+          <label id="entryItemSelectedRow">Produkt ausgewählt
+            <input id="entryItemDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Produkt gewählt" />
+            <input type="hidden" name="itemId" id="entryItem" />
           </label>
           <label>Datum
             <input name="date" id="entryDate" type="date" required />
@@ -156,9 +161,9 @@
       </section>
 
       <section id="stamm-produkte" class="subpanel" role="tabpanel" hidden>
-        <h2>Produkte / Dienstleistungen</h2>
+        <h2>Produkte</h2>
         <section class="subsection">
-          <h3>Produkt / Dienstleistung erfassen</h3>
+          <h3>Produkt erfassen</h3>
           <form id="itemForm" class="form-grid">
             <label>Bezeichnung<input name="name" type="text" required /></label>
             <label>Typ
@@ -175,7 +180,7 @@
           </form>
         </section>
         <section class="subsection product-list-section">
-          <h3>Meine Produkte / Dienstleistungen</h3>
+          <h3>Meine Produkte</h3>
           <div class="entry-list-filter-row">
             <label class="entry-list-filter-label">Dienstleistungen/Produkte suchen
               <input id="itemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis..." autocomplete="off" />
@@ -264,10 +269,14 @@
 
     <section id="einstellungen" class="panel" role="tabpanel" hidden>
       <h2>Einstellungen</h2>
-      <h3>Datenbereinigung</h3>
+      <h3>Währung</h3>
       <form id="settingsForm" class="form-grid">
+        <label>Währung (ISO-Code, z.B. CHF)
+          <input id="currencyCode" name="currency" type="text" value="CHF" maxlength="3" required />
+        </label>
+        <h3 class="settings-subtitle">Datenbereinigung</h3>
         <label>Erfassungen aufbewahren (Monate)
-          <select id="retentionMonths" name="retentionMonths">
+          <select id="retentionMonths" name="retentionMonths" required>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -381,6 +390,14 @@ Stunden auswerten und abrechnen
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
 
 
