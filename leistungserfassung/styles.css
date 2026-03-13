@@ -402,6 +402,11 @@ button.danger {
   .form-grid button {
     grid-column: 1 / -1;
   }
+
+  .form-grid .settings-subtitle {
+    grid-column: 1 / -1;
+    margin: 0.3rem 0 0.1rem;
+  }
 }
 
 @media (max-width: 420px) {
@@ -557,7 +562,8 @@ button:disabled {
 
 
 #entryCustomerSelectedRow,
-#entryEmployeeSelectedRow {
+#entryEmployeeSelectedRow,
+#entryItemSelectedRow {
   display: none;
 }
 
@@ -567,5 +573,11 @@ button:disabled {
 #itemList {
   min-height: 45vh;
 }
+
+
+
+
+
+
 
 

@@ -10,6 +10,7 @@ let editingProductTypeId = null;
 let editingEntryId = null;
 let customerSuggestionMap = new Map();
 let employeeSuggestionMap = new Map();
+let itemSuggestionMap = new Map();
 ensureCleaningServiceExists();
 
 const tabs = [...document.querySelectorAll(".tabs-main .tab")];
@@ -65,6 +66,9 @@ const entryEmployeeDisplay = document.getElementById("entryEmployeeDisplay");
 const entryEmployeeSearch = document.getElementById("entryEmployeeSearch");
 const employeeSuggestions = document.getElementById("employeeSuggestions");
 const entryItem = document.getElementById("entryItem");
+const entryItemDisplay = document.getElementById("entryItemDisplay");
+const entryItemSearch = document.getElementById("entryItemSearch");
+const itemSuggestions = document.getElementById("itemSuggestions");
 const entryDate = document.getElementById("entryDate");
 const entryQuantityInput = entryForm.querySelector('input[name="quantity"]');
 const itemTypeSelect = document.getElementById("itemType");
@@ -77,6 +81,7 @@ const exportCleanupList = document.getElementById("exportCleanupList");
 const importBtn = document.getElementById("importBtn");
 const importFile = document.getElementById("importFile");
 const importStatus = document.getElementById("importStatus");
+const currencyCode = document.getElementById("currencyCode");
 const retentionMonths = document.getElementById("retentionMonths");
 const settingsStatus = document.getElementById("settingsStatus");
 const resetConfirmCheckbox = document.getElementById("resetConfirmCheckbox");
@@ -160,6 +165,7 @@ function normalizeStateData(parsed) {
     units,
     productTypes,
     settings: {
+      currency: normalizeCurrency(parsed?.settings?.currency),
       retentionMonths: normalizeMonths(parsed?.settings?.retentionMonths)
     }
   };
@@ -415,7 +421,7 @@ function wireForms() {
     renderEntries();
   });
 
-  entryItem.addEventListener("change", () => {
+  entryItemSearch?.addEventListener("input", () => {
     updateEntryQuantityConstraints();
   });
 
@@ -667,11 +673,13 @@ function wireExport() {
 function wireSettings() {
   settingsForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    state.settings.currency = normalizeCurrency(currencyCode?.value);
     state.settings.retentionMonths = normalizeMonths(retentionMonths.value);
+    if (currencyCode) currencyCode.value = state.settings.currency;
     saveState();
-    settingsStatus.textContent = `Gespeichert: Erfassungen werden ${state.settings.retentionMonths} Monate aufbewahrt.`;
+    settingsStatus.textContent = `Gespeichert: Währung ${state.settings.currency}. Erfassungen werden ${state.settings.retentionMonths} Monate aufbewahrt.`;
     showFlashMessage("Einstellungen gespeichert");
-    renderExportCleanupPreview();
+    renderAll();
   });
 }
 
@@ -700,7 +708,7 @@ function wireResetConfirmation() {
     state.entries = [];
     state.units = [];
     state.productTypes = [];
-    state.settings = { retentionMonths: 12 };
+    state.settings = { currency: "CHF", retentionMonths: 12 };
     ensureCleaningServiceExists();
 
     resetCustomerForm();
@@ -762,6 +770,26 @@ function wireSearch() {
 
   entryEmployeeSearch.addEventListener("focus", () => {
     renderEmployeeSuggestions(entryEmployeeSearch.value);
+  });
+
+  const syncItemSelectionFromSearch = () => {
+    let matchedId = getItemIdFromSuggestion(entryItemSearch.value);
+    if (!matchedId) {
+      renderItemSuggestions(entryItemSearch.value);
+      matchedId = getItemIdFromSuggestion(entryItemSearch.value);
+    }
+    if (matchedId) {
+      setSelectedItem(matchedId);
+    } else if (!entryItemSearch.value.trim()) {
+      clearSelectedItem();
+    }
+  };
+
+  entryItemSearch.addEventListener("input", syncItemSelectionFromSearch);
+  entryItemSearch.addEventListener("change", syncItemSelectionFromSearch);
+
+  entryItemSearch.addEventListener("focus", () => {
+    renderItemSuggestions(entryItemSearch.value);
   });
 
   entryListCustomerSearch?.addEventListener("input", () => {
@@ -1114,7 +1142,8 @@ function editEntry(entryId) {
   const editCustomer = state.customers.find((c) => c.id === entry.customerId);
   entryCustomerSearch.value = editCustomer ? getCustomerDisplay(editCustomer) : "";
   entryEmployeeSearch.value = entryEmployeeDisplay.value || "";
-  entryItem.value = String(entry.itemId || "");
+  setSelectedItem(String(entry.itemId || ""));
+  entryItemSearch.value = entryItemDisplay.value || "";
   entryDate.value = String(entry.date || entryDate.value || new Date().toISOString().slice(0, 10));
   entryForm.quantity.value = String(entry.quantity ?? "");
   entryForm.note.value = String(entry.note || "");
@@ -1190,7 +1219,8 @@ function resetEntryForm() {
   editingEntryId = null;
   entrySubmitBtn.textContent = "Erfassung speichern";
   if (entryCancelBtn) entryCancelBtn.hidden = true;
-  entryItem.value = "";
+  clearSelectedItem();
+  entryItemSearch.value = "";
   entryForm.quantity.value = "";
   entryForm.note.value = "";
   clearSelectedCustomer();
@@ -1199,6 +1229,7 @@ function resetEntryForm() {
   entryEmployeeSearch.value = "";
   renderCustomerSuggestions("");
   renderEmployeeSuggestions("");
+  renderItemSuggestions("");
   updateEntryQuantityConstraints();
   refreshRequiredFieldStates();
   entryForm.quantity?.focus();
@@ -1292,6 +1323,7 @@ function normalizeImport(parsed) {
     });
 
   const settings = {
+    currency: normalizeCurrency(parsed?.settings?.currency),
     retentionMonths: normalizeMonths(parsed?.settings?.retentionMonths)
   };
 
@@ -1366,6 +1398,7 @@ function updateRequiredFieldState(field) {
 function updateEntrySelectionDisplayStates() {
   setDisplayFieldState(entryCustomerDisplay, String(entryCustomer.value || "").trim().length > 0);
   setDisplayFieldState(entryEmployeeDisplay, String(entryEmployee.value || "").trim().length > 0);
+  setDisplayFieldState(entryItemDisplay, String(entryItem.value || "").trim().length > 0);
 }
 
 
@@ -1407,6 +1440,7 @@ function setDisplayFieldState(field, isValid) {
 }
 
 function renderSettings() {
+  if (currencyCode) currencyCode.value = normalizeCurrency(state?.settings?.currency);
   retentionMonths.value = String(normalizeMonths(state?.settings?.retentionMonths));
 }
 
@@ -1636,26 +1670,15 @@ function renderEntrySelects() {
   if (!selectedEmployeeExists) {
     clearSelectedEmployee();
   }
-
-  const previousItemId = entryItem.value;
-  entryItem.innerHTML = state.items.length
-    ? `<option value="">Bitte auswählen</option>${state.items
-      .map((i) => `<option value="${escapeHtml(i.id)}">${escapeHtml(i.name)} (${formatCurrency(i.price)})</option>`)
-      .join("")}`
-    : "<option value=''>Zuerst Dienstleistungen/Produkte erfassen</option>";
-
-  entryItem.disabled = !state.items.length;
-  if (state.items.length) {
-    if (state.items.some((item) => item.id === previousItemId)) {
-      entryItem.value = previousItemId;
-    } else {
-      entryItem.value = "";
-    }
+  const selectedItemExists = state.items.some((item) => item.id === entryItem.value);
+  if (!selectedItemExists) {
+    clearSelectedItem();
   }
-  updateEntryQuantityConstraints();
 
   renderCustomerSuggestions(entryCustomerSearch.value);
   renderEmployeeSuggestions(entryEmployeeSearch.value);
+  renderItemSuggestions(entryItemSearch.value);
+  updateEntryQuantityConstraints();
 }
 
 function updateEntryQuantityConstraints() {
@@ -1686,6 +1709,8 @@ function resetEntryCustomerSelection() {
   clearSelectedCustomer();
   entryEmployeeSearch.value = "";
   clearSelectedEmployee();
+  entryItemSearch.value = "";
+  clearSelectedItem();
   renderEntrySelects();
 }
 
@@ -1795,10 +1820,16 @@ function formToObject(form) {
 }
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat("de-CH", {
-    style: "currency",
-    currency: "CHF"
-  }).format(value || 0);
+  const currency = normalizeCurrency(state?.settings?.currency);
+  try {
+    return new Intl.NumberFormat("de-CH", {
+      style: "currency",
+      currency
+    }).format(value || 0);
+  } catch {
+    const amount = new Intl.NumberFormat("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+    return `${currency} ${amount}`;
+  }
 }
 
 function parseAmount(value) {
@@ -1903,6 +1934,57 @@ function renderEmployeeSuggestions(queryValue) {
     .join("");
 }
 
+
+function renderItemSuggestions(queryValue) {
+  const query = normalizeSearchText(queryValue);
+  const filtered = state.items.filter((item) => {
+    if (!query) return true;
+    const haystack = normalizeSearchText([
+      item.name,
+      getItemTypeName(item),
+      getItemUnitName(item),
+      String(item.price)
+    ].join(" "));
+    return haystack.includes(query);
+  });
+
+  itemSuggestionMap = new Map();
+  filtered.forEach((item) => {
+    const display = getItemDisplay(item);
+    itemSuggestionMap.set(display, item.id);
+    itemSuggestionMap.set(normalizeSearchText(display), item.id);
+  });
+
+  itemSuggestions.innerHTML = filtered
+    .slice(0, 30)
+    .map((item) => `<option value="${escapeHtml(getItemDisplay(item))}"></option>`)
+    .join("");
+}
+
+function getItemIdFromSuggestion(inputValue) {
+  const normalizedInput = (inputValue || "").trim();
+  if (!normalizedInput) return "";
+
+  if (itemSuggestionMap.has(normalizedInput)) {
+    return itemSuggestionMap.get(normalizedInput) || "";
+  }
+
+  const normalized = normalizeSearchText(normalizedInput);
+  if (itemSuggestionMap.has(normalized)) {
+    return itemSuggestionMap.get(normalized) || "";
+  }
+
+  for (const [label, id] of itemSuggestionMap.entries()) {
+    if (normalizeSearchText(label) === normalized) return id;
+  }
+
+  return "";
+}
+
+function getItemDisplay(item) {
+  const unit = getItemUnitName(item);
+  return `${item.name} (${formatCurrency(item.price)} / ${unit})`;
+}
 function getCustomerIdFromSuggestion(inputValue) {
   const normalizedInput = (inputValue || "").trim();
   if (!normalizedInput) return "";
@@ -2049,6 +2131,25 @@ function setSelectedEmployee(employeeId) {
   refreshRequiredFieldStates();
 }
 
+
+function setSelectedItem(itemId) {
+  const item = state.items.find((i) => i.id === itemId);
+  if (!item) {
+    clearSelectedItem();
+    return;
+  }
+  entryItem.value = item.id;
+  entryItemDisplay.value = getItemDisplay(item);
+  updateEntryQuantityConstraints();
+  refreshRequiredFieldStates();
+}
+
+function clearSelectedItem() {
+  entryItem.value = "";
+  entryItemDisplay.value = "";
+  updateEntryQuantityConstraints();
+  refreshRequiredFieldStates();
+}
 function clearSelectedCustomer() {
   entryCustomer.value = "";
   entryCustomerDisplay.value = "";
@@ -2090,6 +2191,11 @@ function ensureCleaningServiceExists() {
     price: 35
   });
   saveState();
+}
+
+function normalizeCurrency(value) {
+  const code = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code) ? code : "CHF";
 }
 
 function normalizeMonths(value) {
@@ -2157,6 +2263,12 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
+
+
+
+
+
 
 
 
