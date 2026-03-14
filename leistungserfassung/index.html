@@ -141,7 +141,7 @@
             <label>Telefon<input name="phone" type="tel" /></label>
             <label>Email<input name="email" type="email" /></label>
             <label>IBAN<input name="iban" type="text" placeholder="CHxx xxxx xxxx xxxx xxxx x" /></label>
-            <label>Vereinbarter Stundenlohn (CHF)<input name="hourlyWage" type="number" step="0.01" min="0" required /></label>
+            <label>Vereinbarter Stundenlohn<input name="hourlyWage" type="number" step="0.01" min="0" required /></label>
             <div class="actions">
               <button id="employeeSubmitBtn" type="submit" class="primary" disabled>Mitarbeiter speichern</button>
               <button id="employeeCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
@@ -172,7 +172,8 @@
             <label>Einheit
               <select name="unitId" id="itemUnit" required></select>
             </label>
-            <label>Preis pro Einheit (CHF)<input name="price" type="number" step="0.01" min="0" required /></label>
+            <label>Preis pro Einheit<input name="price" type="number" step="0.01" min="0" required /></label>
+            <label>Einstandspreis<input name="costPrice" type="number" step="0.01" min="0" required /></label>
             <div class="actions">
               <button id="itemSubmitBtn" type="submit" class="primary" disabled>Eintrag speichern</button>
               <button id="itemCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
@@ -182,8 +183,8 @@
         <section class="subsection product-list-section">
           <h3>Meine Produkte</h3>
           <div class="entry-list-filter-row">
-            <label class="entry-list-filter-label">Dienstleistungen/Produkte suchen
-              <input id="itemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis..." autocomplete="off" />
+            <label class="entry-list-filter-label">Produkte suchen
+              <input id="itemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis, Einstand..." autocomplete="off" />
             </label>
             <button id="itemSearchClear" type="button" class="secondary" aria-label="Produktsuche zurücksetzen">X</button>
           </div>
@@ -257,7 +258,7 @@
 
       <section id="wartung-export" class="subpanel active" role="tabpanel">
         <h2>Datenexport</h2>
-        <p>Exportiert alle mobilen Daten (Kunden, Mitarbeiter, Dienstleistungen/Produkte, Erfassungen) als JSON-Datei.</p>
+        <p>Exportiert alle mobilen Daten (Kunden, Mitarbeiter, Produkte, Erfassungen) als JSON-Datei.</p>
         <button id="exportBtn" class="primary">Exportieren</button>
         <section id="exportCleanupResult" class="cleanup-result" hidden>
           <h3>Werden beim Export bereinigt</h3>
@@ -319,7 +320,8 @@
       <section class="subsection guide">
         <h3>So ist die App gedacht</h3>
         <ol>
-          <li>Zuerst unter <strong>Stammdaten</strong> alles einmalig erfassen: Kunden, Mitarbeiter, Produkte/Dienstleistungen.</li>
+          <li>Zuerst unter <strong>Stammdaten</strong> alles einmalig erfassen: Kunden, Mitarbeiter, Produkte, Einheiten und Produkttypen.</li>
+          <li>Unter <strong>Einstellungen</strong> Währung und Aufbewahrungsdauer prüfen/speichern.</li>
           <li>Danach täglich unter <strong>Erfassung</strong> pro Kunde/Mitarbeiter die Leistung mit Datum und Menge erfassen.</li>
           <li>Monatsende: Export-Datei in der Desktop-App importieren und Rechnungen erstellen.</li>
         </ol>
@@ -338,7 +340,7 @@
         <h3>Wichtig: Regelmässig exportieren</h3>
         <p><strong>Wichtig:</strong> Alle Daten werden im Local Storage des Browsers gespeichert und können bei Browser-Reset, App-/Browser-Update oder Gerätewechsel verloren gehen.</p>
         <p>Exportiere die Daten regelmässig (am besten täglich) und speichere die Datei zusätzlich in einer Cloud, z.B. Google Drive.</p>
-        <p>Falls Daten verloren gehen, kann ein früherer Export über <strong>Wartung &gt; Import</strong> wieder importiert werden.</p>
+        <p>Falls Daten verloren gehen, kann ein früherer Export über <strong>Daten &gt; Import</strong> wieder importiert werden.</p>
       </section>
 
       <section class="subsection guide">
@@ -353,7 +355,11 @@
         <h3>Flussdiagramm</h3>
         <pre class="flow-diagram">
 [Stammdaten erfassen]
-Kunden | Mitarbeiter | Produkte
+Kunden | Mitarbeiter | Produkte | Einheiten | Produkttypen
+            |
+            v
+[Einstellungen prüfen]
+Währung und Aufbewahrungsdauer festlegen
             |
             v
 [Tägliche Leistungserfassung]
@@ -390,6 +396,14 @@ Stunden auswerten und abrechnen
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
 
 

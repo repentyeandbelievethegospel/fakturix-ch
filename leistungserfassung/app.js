@@ -135,6 +135,7 @@ function normalizeStateData(parsed) {
       id: item?.id || generateId(),
       name: String(item?.name || ""),
       price: Number(item?.price) || 0,
+      costPrice: parseAmount(item?.costPrice ?? item?.purchasePrice ?? item?.einstandspreis),
       typeId: String(item?.typeId || ""),
       unitId: String(item?.unitId || ""),
       type: String(item?.type || ""),
@@ -323,7 +324,8 @@ function wireForms() {
       unitId,
       type: typeName,
       unit: unitName,
-      price: Number(data.price)
+      price: Number(data.price),
+      costPrice: parseAmount(data.costPrice)
     };
 
     if (editingItemId) {
@@ -1022,6 +1024,7 @@ function editItem(itemId) {
   if (itemTypeSelect) itemTypeSelect.value = typeId;
   if (itemUnitSelect) itemUnitSelect.value = unitId;
   itemForm.price.value = String(item.price ?? "");
+  itemForm.costPrice.value = item.costPrice == null ? "" : String(item.costPrice);
 
   editingItemId = itemId;
   itemSubmitBtn.textContent = "Eintrag aktualisieren";
@@ -1284,7 +1287,8 @@ function normalizeImport(parsed) {
       unitId: resolvedUnitId,
       type: getCatalogNameById(productTypes, resolvedTypeId) || typeName,
       unit: getCatalogNameById(units, resolvedUnitId) || unitName,
-      price: Number(i?.price) || 0
+      price: Number(i?.price) || 0,
+      costPrice: parseAmount(i?.costPrice ?? i?.purchasePrice ?? i?.einstandspreis)
     };
   });
 
@@ -1367,11 +1371,21 @@ function wireRequiredFieldStates() {
     field.addEventListener("blur", refresh);
     refresh();
   });
+  const optionalFields = document.querySelectorAll("form input[data-optional-indicator], form select[data-optional-indicator], form textarea[data-optional-indicator]");
+  optionalFields.forEach((field) => {
+    const refresh = () => updateOptionalFieldState(field);
+    field.addEventListener("input", refresh);
+    field.addEventListener("change", refresh);
+    field.addEventListener("blur", refresh);
+    refresh();
+  });
 }
 
 function refreshRequiredFieldStates() {
   const requiredFields = document.querySelectorAll("form input[required], form select[required], form textarea[required]");
   requiredFields.forEach((field) => updateRequiredFieldState(field));
+  const optionalFields = document.querySelectorAll("form input[data-optional-indicator], form select[data-optional-indicator], form textarea[data-optional-indicator]");
+  optionalFields.forEach((field) => updateOptionalFieldState(field));
   updateEntrySelectionDisplayStates();
   syncEntrySubmitButtonState();
 }
@@ -1386,6 +1400,18 @@ function updateRequiredFieldState(field) {
     const linkedHasValue = String(linkedField?.value ?? "").trim().length > 0;
     isValid = isValid && linkedHasValue;
   }
+  field.classList.toggle("required-empty", !isValid);
+  field.classList.toggle("required-filled", isValid);
+  const label = field.closest("label");
+  if (!label) return;
+  label.classList.add("required-indicator");
+  label.classList.toggle("required-empty", !isValid);
+  label.classList.toggle("required-filled", isValid);
+}
+
+function updateOptionalFieldState(field) {
+  const rawValue = String(field?.value ?? "").trim();
+  const isValid = rawValue.length === 0 ? true : field.checkValidity();
   field.classList.toggle("required-empty", !isValid);
   field.classList.toggle("required-filled", isValid);
   const label = field.closest("label");
@@ -1635,7 +1661,8 @@ function renderItems() {
       i.name,
       getItemTypeName(i),
       getItemUnitName(i),
-      String(i.price)
+      String(i.price),
+      String(i.costPrice ?? "")
     ].join(" "));
     return haystack.includes(query);
   });
@@ -1650,7 +1677,7 @@ function renderItems() {
       (i) => `
       <article class="card">
         <strong>${escapeHtml(i.name)}</strong>
-        <small>${escapeHtml(getItemTypeName(i))} | ${formatCurrency(i.price)} / ${escapeHtml(getItemUnitName(i))}</small>
+        <small>${escapeHtml(getItemTypeName(i))} | ${formatCurrency(i.price)} / ${escapeHtml(getItemUnitName(i))}${i.costPrice != null ? ` | Einstand: ${formatCurrency(i.costPrice)}` : ""}</small>
         <div class="card-actions">
           <button type="button" class="secondary" data-action="edit" data-id="${escapeHtml(i.id)}">Bearbeiten</button>
           <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(i.id)}">Löschen</button>
@@ -1943,7 +1970,8 @@ function renderItemSuggestions(queryValue) {
       item.name,
       getItemTypeName(item),
       getItemUnitName(item),
-      String(item.price)
+      String(item.price),
+      String(item.costPrice ?? "")
     ].join(" "));
     return haystack.includes(query);
   });
@@ -2175,6 +2203,7 @@ function ensureCleaningServiceExists() {
       item.unitId = item.unitId || findOrCreateCatalogByName(state.units, item.unit || "Stunde/n").id;
       item.type = getItemTypeName(item);
       item.unit = getItemUnitName(item);
+      item.costPrice = parseAmount(item.costPrice ?? item.purchasePrice ?? item.einstandspreis);
     });
     return;
   }
@@ -2188,7 +2217,8 @@ function ensureCleaningServiceExists() {
     unitId: defaultUnit.id,
     type: defaultType.name,
     unit: defaultUnit.name,
-    price: 35
+    price: 35,
+    costPrice: null
   });
   saveState();
 }
@@ -2263,6 +2293,7 @@ function renderExportCleanupResult(entries) {
     })
     .join("");
 }
+
 
 
 
