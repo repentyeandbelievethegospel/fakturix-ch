@@ -370,7 +370,7 @@ button.danger {
   margin: 0.2rem 0 0;
   padding-left: 1.1rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
 }
 
 .guide p {
@@ -578,6 +578,238 @@ button:disabled {
 
 
 
+
+
+
+
+.report-calendar-wrap {
+  margin-top: 0.7rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.hours-day-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.hours-day-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #fafafa;
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  overflow: hidden;
+}
+
+.hours-day-card.has-data {
+  border-color: #bfd7bf;
+  background: #f8fcf8;
+}
+
+.hours-day-card.no-data {
+  border-color: #f2b8b8;
+  background: #fff5f5;
+}
+
+.hours-day-card.is-weekend {
+  border-color: #c7d2fe;
+  background: #f5f8ff;
+}
+
+.hours-day-card.is-weekend.has-data {
+  border-color: #6aa86a;
+  background: #dff2df;
+}
+
+.hours-day-card.no-data.is-weekend {
+  border-color: #ef9a9a;
+  background: #ffecec;
+}
+
+.hours-day-meta {
+  background: #f1f5f9;
+  border-right: 1px solid #dbe3ea;
+  padding: 0.5rem 0.35rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.hours-day-card.is-weekend .hours-day-meta {
+  background: #e9f0ff;
+}
+
+.day-weekday {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.day-no {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.day-date {
+  font-size: 0.7rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+.hours-day-content {
+  padding: 0.5rem 0.6rem;
+}
+
+.hours-day-empty {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.hours-calendar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.hours-calendar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(78px, auto);
+  gap: 0.45rem;
+  align-items: start;
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hours-calendar-row .col-customer,
+.hours-calendar-row .col-employee {
+  overflow-wrap: anywhere;
+}
+
+.hours-calendar-row .col-hours {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.hours-calendar-cell-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(78px, auto);
+  gap: 0.45rem;
+  margin: 0 0 0.2rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px dashed #d1d5db;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.hours-calendar-cell-columns span:last-child {
+  text-align: right;
+}
+
+.hours-calendar-total {
+  margin-top: 0.32rem;
+  padding-top: 0.28rem;
+  border-top: 1px solid #d1d5db;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 420px) {
+  .hours-day-card {
+    grid-template-columns: 64px 1fr;
+  }
+
+  .hours-day-content {
+    padding: 0.45rem 0.5rem;
+  }
+
+  .hours-calendar-row,
+  .hours-calendar-cell-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(72px, auto);
+    gap: 0.35rem;
+  }
+}
+
+.hours-calendar-row > *,
+.hours-calendar-cell-columns > * {
+  min-width: 0;
+}
+
+
+
+.hours-money-row,
+.hours-money-columns {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(74px, auto) minmax(110px, auto) minmax(120px, auto);
+}
+
+.hours-money-row .col-hours,
+.hours-money-row .col-rate,
+.hours-money-row .col-total,
+.hours-money-columns span:nth-child(3),
+.hours-money-columns span:nth-child(4),
+.hours-money-columns span:nth-child(5) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours-money-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(74px, auto) minmax(110px, auto) minmax(120px, auto);
+  gap: 0.45rem;
+}
+
+.hours-money-total > span:first-child {
+  grid-column: 1 / 3;
+}
+
+.hours-money-total strong:nth-child(2) {
+  grid-column: 3;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours-money-total strong:nth-child(3) {
+  grid-column: 5;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .hours-money-row,
+  .hours-money-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(66px, auto) minmax(92px, auto) minmax(102px, auto);
+    gap: 0.3rem;
+  }
+
+  .hours-money-total {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(66px, auto) minmax(92px, auto) minmax(102px, auto);
+    row-gap: 0.2rem;
+  }
+
+  .hours-money-total > span:first-child {
+    grid-column: 1 / 3;
+  }
+
+  .hours-money-total strong:nth-child(2) {
+    grid-column: 3;
+  }
+
+  .hours-money-total strong:nth-child(3) {
+    grid-column: 5;
+  }
+}
 
 
 

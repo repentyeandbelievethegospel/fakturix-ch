@@ -1,6 +1,4 @@
-﻿const STORAGE_KEY = "fakturix_ch_erfassung_data_v1";
-const LEGACY_STORAGE_KEY = "putzpro_mobile_data_v1";
-
+﻿const STORAGE_KEY = "fakturix_ch_erfassung_data_v2";
 const state = loadState();
 let editingCustomerId = null;
 let editingEmployeeId = null;
@@ -12,6 +10,7 @@ let customerSuggestionMap = new Map();
 let employeeSuggestionMap = new Map();
 let itemSuggestionMap = new Map();
 ensureCleaningServiceExists();
+enforceFixedUnitsCatalog();
 
 const tabs = [...document.querySelectorAll(".tabs-main .tab")];
 const panels = [...document.querySelectorAll(".panel")];
@@ -38,18 +37,38 @@ const entrySubmitBtn = document.getElementById("entrySubmitBtn");
 const entryCancelBtn = document.getElementById("entryCancelBtn");
 
 const customerList = document.getElementById("customerList");
+const deletedCustomerList = document.getElementById("deletedCustomerList");
+const deletedCustomerSearch = document.getElementById("deletedCustomerSearch");
+const deletedCustomerSearchClear = document.getElementById("deletedCustomerSearchClear");
+const deletedCustomerSummary = document.getElementById("deletedCustomerSummary");
 const customerSearch = document.getElementById("customerSearch");
 const customerSearchClear = document.getElementById("customerSearchClear");
 const employeeList = document.getElementById("employeeList");
+const deletedEmployeeList = document.getElementById("deletedEmployeeList");
+const deletedEmployeeSearch = document.getElementById("deletedEmployeeSearch");
+const deletedEmployeeSearchClear = document.getElementById("deletedEmployeeSearchClear");
+const deletedEmployeeSummary = document.getElementById("deletedEmployeeSummary");
 const employeeSearch = document.getElementById("employeeSearch");
 const employeeSearchClear = document.getElementById("employeeSearchClear");
 const itemList = document.getElementById("itemList");
+const deletedItemList = document.getElementById("deletedItemList");
+const deletedItemSearch = document.getElementById("deletedItemSearch");
+const deletedItemSearchClear = document.getElementById("deletedItemSearchClear");
+const deletedItemSummary = document.getElementById("deletedItemSummary");
 const itemSearch = document.getElementById("itemSearch");
 const itemSearchClear = document.getElementById("itemSearchClear");
 const unitList = document.getElementById("unitList");
+const deletedUnitList = document.getElementById("deletedUnitList");
+const deletedUnitSearch = document.getElementById("deletedUnitSearch");
+const deletedUnitSearchClear = document.getElementById("deletedUnitSearchClear");
+const deletedUnitSummary = document.getElementById("deletedUnitSummary");
 const unitSearch = document.getElementById("unitSearch");
 const unitSearchClear = document.getElementById("unitSearchClear");
 const productTypeList = document.getElementById("productTypeList");
+const deletedProductTypeList = document.getElementById("deletedProductTypeList");
+const deletedProductTypeSearch = document.getElementById("deletedProductTypeSearch");
+const deletedProductTypeSearchClear = document.getElementById("deletedProductTypeSearchClear");
+const deletedProductTypeSummary = document.getElementById("deletedProductTypeSummary");
 const productTypeSearch = document.getElementById("productTypeSearch");
 const productTypeSearchClear = document.getElementById("productTypeSearchClear");
 const entryListHeader = document.getElementById("entryListHeader");
@@ -70,6 +89,9 @@ const entryItemDisplay = document.getElementById("entryItemDisplay");
 const entryItemSearch = document.getElementById("entryItemSearch");
 const itemSuggestions = document.getElementById("itemSuggestions");
 const entryDate = document.getElementById("entryDate");
+const reportMonth = document.getElementById("reportMonth");
+const reportCalendar = document.getElementById("reportCalendar");
+const reportCalendarProducts = document.getElementById("reportCalendarProducts");
 const entryQuantityInput = entryForm.querySelector('input[name="quantity"]');
 const itemTypeSelect = document.getElementById("itemType");
 const itemUnitSelect = document.getElementById("itemUnit");
@@ -100,16 +122,17 @@ wireSearch();
 wireCustomerSearch();
 wireEmployeeSearch();
 wireItemSearch();
-wireUnitSearch();
 wireProductTypeSearch();
+wireDeletedMasterDataSearch();
 wireSettings();
+wireReportOverview();
 wireResetConfirmation();
 wireRequiredFieldStates();
 renderAll();
 
 function loadState() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return normalizeStateData({ customers: [], employees: [], items: [], entries: [], units: [], productTypes: [], settings: { retentionMonths: 12 } });
     const parsed = JSON.parse(saved);
     return normalizeStateData(parsed);
@@ -118,16 +141,51 @@ function loadState() {
   }
 }
 
+
+function enforceFixedUnitsCatalog() {
+  state.units = [
+    { id: "unit-h", name: "h" },
+    { id: "unit-stk", name: "Stk" }
+  ];
+
+  state.items.forEach((item) => {
+    const normalizedId = item.unitId === "unit-stk" ? "unit-stk" : "unit-h";
+    item.unitId = normalizedId;
+    item.unit = normalizedId === "unit-stk" ? "Stk" : "h";
+  });
+}
 function normalizeStateData(parsed) {
-  const customers = Array.isArray(parsed?.customers) ? parsed.customers : [];
-  const employees = Array.isArray(parsed?.employees) ? parsed.employees : [];
+  const customers = (Array.isArray(parsed?.customers) ? parsed.customers : []).map((c) => ({
+    id: c?.id || generateId(),
+    company: String(c?.company || ""),
+    firstName: String(c?.firstName || ""),
+    lastName: String(c?.lastName || ""),
+    street: String(c?.street || ""),
+    zip: String(c?.zip || ""),
+    city: String(c?.city || ""),
+    phone: String(c?.phone || ""),
+    email: String(c?.email || ""),
+    deleted: c?.deleted === true || String(c?.deleted || "").toLowerCase() === "true"
+  }));
+  const employees = (Array.isArray(parsed?.employees) ? parsed.employees : []).map((e) => ({
+    id: e?.id || generateId(),
+    firstName: String(e?.firstName || ""),
+    lastName: String(e?.lastName || ""),
+    street: String(e?.street || ""),
+    zip: String(e?.zip || ""),
+    city: String(e?.city || ""),
+    phone: String(e?.phone || ""),
+    email: String(e?.email || ""),
+    iban: String(e?.iban || ""),
+    hourlyWage: parseAmount(e?.hourlyWage),
+    deleted: e?.deleted === true || String(e?.deleted || "").toLowerCase() === "true"
+  }));
 
-  const units = normalizeNamedCatalog(Array.isArray(parsed?.units) ? parsed.units : [], "Einheit");
-  const productTypes = normalizeNamedCatalog(Array.isArray(parsed?.productTypes) ? parsed.productTypes : [], "Produkttyp");
-
-  ensureCatalogContains(units, "Stunde/n");
-  ensureCatalogContains(units, "Stück");
-  ensureCatalogContains(productTypes, "Dienstleistung");
+  const units = [
+    { id: "unit-h", name: "h" },
+    { id: "unit-stk", name: "Stk" }
+  ];
+  const productTypes = normalizeNamedCatalog(Array.isArray(parsed?.productTypes) ? parsed.productTypes : [], "Produkttyp");  ensureCatalogContains(productTypes, "Dienstleistung");
   ensureCatalogContains(productTypes, "Produkt");
 
   const items = (Array.isArray(parsed?.items) ? parsed.items : []).map((item) => {
@@ -136,6 +194,7 @@ function normalizeStateData(parsed) {
       name: String(item?.name || ""),
       price: Number(item?.price) || 0,
       costPrice: parseAmount(item?.costPrice ?? item?.purchasePrice ?? item?.einstandspreis),
+      deleted: item?.deleted === true || String(item?.deleted || "").toLowerCase() === "true",
       typeId: String(item?.typeId || ""),
       unitId: String(item?.unitId || ""),
       type: String(item?.type || ""),
@@ -147,16 +206,30 @@ function normalizeStateData(parsed) {
       normalized.typeId = ensureCatalogContains(productTypes, fallbackType).id;
     }
     if (!normalized.unitId || !units.some((u) => u.id === normalized.unitId)) {
-      const fallbackUnit = normalizeCatalogName(normalized.unit) || "Stunde/n";
-      normalized.unitId = ensureCatalogContains(units, fallbackUnit).id;
+      normalized.unitId = "unit-h";
     }
 
     normalized.type = getCatalogNameById(productTypes, normalized.typeId) || normalizeCatalogName(normalized.type) || "Dienstleistung";
-    normalized.unit = getCatalogNameById(units, normalized.unitId) || normalizeCatalogName(normalized.unit) || "Stunde/n";
+    normalized.unit = normalized.unitId === "unit-stk" ? "Stk" : "h";
     return normalized;
   });
 
-  const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+  const entries = (Array.isArray(parsed?.entries) ? parsed.entries : []).map((entry) => {
+    const itemId = String(entry?.itemId || "");
+    const item = items.find((i) => i.id === itemId);
+    return {
+      ...entry,
+      id: entry?.id || generateId(),
+      customerId: String(entry?.customerId || ""),
+      employeeId: String(entry?.employeeId || ""),
+      itemId,
+      date: String(entry?.date || ""),
+      quantity: Number(entry?.quantity) > 0 ? Number(entry.quantity) : 1,
+      note: String(entry?.note || ""),
+      unitPrice: parseAmount(entry?.unitPrice),
+      costPrice: normalizeEntryCostPrice(entry, item)
+    };
+  });
 
   return {
     customers,
@@ -207,6 +280,12 @@ function wireTabs() {
         resetEntryCustomerSelection();
         renderEntries();
       }
+
+      if (target === "auswertung") {
+        setDefaultReportMonth();
+        renderReportOverview();
+        renderProductReportOverview();
+      }
     });
   });
 }
@@ -214,6 +293,7 @@ function wireTabs() {
 function wireSubTabs() {
   initSubTabGroup(".panel#stammdaten");
   initSubTabGroup(".panel#wartung");
+  initSubTabGroup(".panel#auswertung");
 }
 
 function initSubTabGroup(panelSelector) {
@@ -253,7 +333,8 @@ function wireForms() {
       zip: data.zip.trim(),
       city: data.city.trim(),
       phone: data.phone?.trim() || "",
-      email: data.email?.trim() || ""
+      email: data.email?.trim() || "",
+      deleted: false
     };
 
     if (editingCustomerId) {
@@ -287,8 +368,10 @@ function wireForms() {
       city: data.city.trim(),
       phone: data.phone?.trim() || "",
       email: data.email?.trim() || "",
+      deleted: false,
       iban: data.iban?.trim() || "",
-      hourlyWage: parseAmount(data.hourlyWage)
+      hourlyWage: parseAmount(data.hourlyWage),
+      deleted: false
     };
 
     if (editingEmployeeId) {
@@ -315,7 +398,7 @@ function wireForms() {
     const typeId = String(data.typeId || "");
     const unitId = String(data.unitId || "");
     const typeName = getCatalogNameById(state.productTypes, typeId) || "Dienstleistung";
-    const unitName = getCatalogNameById(state.units, unitId) || "Stunde/n";
+    const unitName = getCatalogNameById(state.units, unitId) || "h";
 
     const item = {
       id: editingItemId || generateId(),
@@ -325,7 +408,8 @@ function wireForms() {
       type: typeName,
       unit: unitName,
       price: Number(data.price),
-      costPrice: parseAmount(data.costPrice)
+      costPrice: parseAmount(data.costPrice),
+      deleted: false
     };
 
     if (editingItemId) {
@@ -463,17 +547,21 @@ function wireForms() {
       alert("Bitte eine gueltige Menge eingeben.");
       return;
     }
-    if (getItemUnitName(item) === "Stück" && !Number.isInteger(quantity)) {
-      alert("Bei Einheit 'Stück' sind nur ganze Zahlen erlaubt.");
+    if (getItemUnitName(item) === "Stk" && !Number.isInteger(quantity)) {
+      alert("Bei Einheit 'Stk' sind nur ganze Zahlen erlaubt.");
       entryForm.quantity.focus();
       return;
     }
 
     const existingEntry = editingEntryId ? state.entries.find((e) => e.id === editingEntryId) : null;
     const resolvedUnitPrice = resolveEntryUnitPrice(item);
+    const resolvedCostPrice = resolveEntryCostPrice(item);
     const unitPrice = existingEntry && existingEntry.itemId === data.itemId && existingEntry.unitPrice != null
       ? existingEntry.unitPrice
       : resolvedUnitPrice;
+    const costPrice = existingEntry && existingEntry.itemId === data.itemId && existingEntry.costPrice != null
+      ? existingEntry.costPrice
+      : resolvedCostPrice;
 
     const entry = {
       id: editingEntryId || generateId(),
@@ -481,17 +569,41 @@ function wireForms() {
       employeeId: data.employeeId,
       itemId: data.itemId,
       date: data.date,
-      quantity: getItemUnitName(item) === "Stück" ? Math.trunc(quantity) : quantity,
+      quantity: getItemUnitName(item) === "Stk" ? Math.trunc(quantity) : quantity,
       note: data.note?.trim() || "",
-      unitPrice
+      unitPrice,
+      costPrice
     };
+
+    let wasMerged = false;
 
     if (editingEntryId) {
       const index = state.entries.findIndex((e) => e.id === editingEntryId);
       if (index >= 0) state.entries[index] = entry;
       else state.entries.push(entry);
     } else {
-      state.entries.push(entry);
+      const normalizedNote = String(entry.note || "").trim();
+      const mergeIndex = state.entries.findIndex((e) =>
+        String(e.customerId || "") === String(entry.customerId || "") &&
+        String(e.employeeId || "") === String(entry.employeeId || "") &&
+        String(e.itemId || "") === String(entry.itemId || "") &&
+        String(e.date || "") === String(entry.date || "") &&
+        Math.round((Number(e.unitPrice) || 0) * 100) === Math.round((Number(entry.unitPrice) || 0) * 100) &&
+        String(e.note || "").trim() === normalizedNote
+      );
+
+      if (mergeIndex >= 0) {
+        const mergedEntry = { ...state.entries[mergeIndex] };
+        const mergedQty = (Number(mergedEntry.quantity) || 0) + (Number(entry.quantity) || 0);
+        mergedEntry.quantity = getItemUnitName(item) === "Stk" ? Math.trunc(mergedQty) : mergedQty;
+        mergedEntry.unitPrice = entry.unitPrice;
+        mergedEntry.costPrice = entry.costPrice;
+        state.entries[mergeIndex] = mergedEntry;
+        wasMerged = true;
+      } else {
+        state.entries.push(entry);
+        wasMerged = false;
+      }
     }
 
     saveState();
@@ -508,7 +620,14 @@ function wireForms() {
     updateEntryQuantityConstraints();
     refreshRequiredFieldStates();
     renderEntries();
-    showFlashMessage("Erfassung gespeichert");
+
+    if (isEditingEntry) {
+      showFlashMessage("Erfassung aktualisiert");
+    } else if (wasMerged) {
+      showFlashMessage("+ Menge zum bestehenden Eintrag addiert");
+    } else {
+      showFlashMessage("Erfassung gespeichert");
+    }
   });
 }
 function wireCrudActions() {
@@ -528,6 +647,14 @@ function wireCrudActions() {
     }
     });
 
+  deletedCustomerList?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-id]");
+    if (!button) return;
+    if (button.dataset.action === "restore") {
+      restoreCustomer(button.dataset.id);
+    }
+  });
+
     employeeList.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action][data-id]");
       if (!button) return;
@@ -541,6 +668,14 @@ function wireCrudActions() {
 
       if (action === "delete") {
         deleteEmployee(employeeId);
+      }
+    });
+
+    deletedEmployeeList?.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action][data-id]");
+      if (!button) return;
+      if (button.dataset.action === "restore") {
+        restoreEmployee(button.dataset.id);
       }
     });
 
@@ -560,6 +695,14 @@ function wireCrudActions() {
     }
   });
 
+  deletedItemList?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-id]");
+    if (!button) return;
+    if (button.dataset.action === "restore") {
+      restoreItem(button.dataset.id);
+    }
+  });
+
   unitList?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action][data-id]");
     if (!button) return;
@@ -575,6 +718,14 @@ function wireCrudActions() {
     }
   });
 
+  deletedUnitList?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-id]");
+    if (!button) return;
+    if (button.dataset.action === "restore") {
+      restoreUnit(button.dataset.id);
+    }
+  });
+
   productTypeList?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action][data-id]");
     if (!button) return;
@@ -587,6 +738,14 @@ function wireCrudActions() {
     }
     if (action === "delete") {
       deleteProductType(typeId);
+    }
+  });
+
+  deletedProductTypeList?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action][data-id]");
+    if (!button) return;
+    if (button.dataset.action === "restore") {
+      restoreProductType(button.dataset.id);
     }
   });
 
@@ -606,8 +765,13 @@ function wireCrudActions() {
 
 function wireExport() {
   exportBtn.addEventListener("click", async () => {
-    const removedEntries = pruneOldEntriesForExport();
-    const removedCount = removedEntries.length;
+    const cleanup = pruneOldEntriesForExport();
+    const removedCount = cleanup.entries.length;
+    const removedItemCount = cleanup.items.length;
+    const removedUnitCount = cleanup.units.length;
+    const removedTypeCount = cleanup.productTypes.length;
+    const removedCustomerCount = cleanup.customers.length;
+    const removedEmployeeCount = cleanup.employees.length;
     const retentionMonthsCount = normalizeMonths(state?.settings?.retentionMonths);
             const payload = {
         app: "Fakturix CH Leistungserfassung",
@@ -650,7 +814,7 @@ function wireExport() {
                 text: "Export der mobilen Erfassungsdaten",
                 files: [file]
               });
-                exportStatus.textContent = `Export über Teilen-Menü erfolgreich. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}.`;
+                exportStatus.textContent = `Export über Teilen-Menü erfolgreich. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}. Gelöschte Stammdaten ohne Abhängigkeiten entfernt: Kunden ${removedCustomerCount}, Mitarbeiter ${removedEmployeeCount}, Produkte ${removedItemCount}, Einheiten ${removedUnitCount}, Produkttypen ${removedTypeCount}.`;
                 showFlashMessage("Export war erfolgreich");
               renderExportCleanupPreview();
               return;
@@ -661,7 +825,7 @@ function wireExport() {
         }
 
         downloadBlob(blob, fileName);
-        exportStatus.textContent = `Datei "${fileName}" wurde heruntergeladen oder zum Speichern angeboten. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}.`;
+        exportStatus.textContent = `Datei "${fileName}" wurde heruntergeladen oder zum Speichern angeboten. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}. Gelöschte Stammdaten ohne Abhängigkeiten entfernt: Kunden ${removedCustomerCount}, Mitarbeiter ${removedEmployeeCount}, Produkte ${removedItemCount}, Einheiten ${removedUnitCount}, Produkttypen ${removedTypeCount}.`;
         showFlashMessage("Export war erfolgreich");
         renderExportCleanupPreview();
       } catch (error) {
@@ -712,6 +876,7 @@ function wireResetConfirmation() {
     state.productTypes = [];
     state.settings = { currency: "CHF", retentionMonths: 12 };
     ensureCleaningServiceExists();
+    enforceFixedUnitsCatalog();
 
     resetCustomerForm();
     resetEmployeeForm();
@@ -865,6 +1030,47 @@ function wireProductTypeSearch() {
   });
 }
 
+function wireDeletedMasterDataSearch() {
+  deletedCustomerSearch?.addEventListener("input", renderDeletedCustomers);
+  deletedCustomerSearchClear?.addEventListener("click", () => {
+    if (!deletedCustomerSearch) return;
+    deletedCustomerSearch.value = "";
+    deletedCustomerSearch.focus();
+    renderDeletedCustomers();
+  });
+
+  deletedEmployeeSearch?.addEventListener("input", renderDeletedEmployees);
+  deletedEmployeeSearchClear?.addEventListener("click", () => {
+    if (!deletedEmployeeSearch) return;
+    deletedEmployeeSearch.value = "";
+    deletedEmployeeSearch.focus();
+    renderDeletedEmployees();
+  });
+
+  deletedItemSearch?.addEventListener("input", renderDeletedItems);
+  deletedItemSearchClear?.addEventListener("click", () => {
+    if (!deletedItemSearch) return;
+    deletedItemSearch.value = "";
+    deletedItemSearch.focus();
+    renderDeletedItems();
+  });
+
+  deletedUnitSearch?.addEventListener("input", renderDeletedUnits);
+  deletedUnitSearchClear?.addEventListener("click", () => {
+    if (!deletedUnitSearch) return;
+    deletedUnitSearch.value = "";
+    deletedUnitSearch.focus();
+    renderDeletedUnits();
+  });
+
+  deletedProductTypeSearch?.addEventListener("input", renderDeletedProductTypes);
+  deletedProductTypeSearchClear?.addEventListener("click", () => {
+    if (!deletedProductTypeSearch) return;
+    deletedProductTypeSearch.value = "";
+    deletedProductTypeSearch.focus();
+    renderDeletedProductTypes();
+  });
+}
 function wireImport() {
   const syncImportButtonState = () => {
     const hasFile = Boolean(importFile.files?.[0]);
@@ -909,7 +1115,7 @@ function wireImport() {
         state.productTypes = normalized.productTypes;
         state.settings = normalized.settings;
         ensureCleaningServiceExists();
-
+        enforceFixedUnitsCatalog();
       resetCustomerForm();
       resetEmployeeForm();
       resetItemForm();
@@ -982,11 +1188,14 @@ function deleteCustomer(customerId) {
   const customer = state.customers.find((c) => c.id === customerId);
   if (!customer) return;
 
-  const confirmed = confirm("Kunde löschen? Zugehörige Erfassungen werden ebenfalls gelöscht.");
+  const confirmed = confirm("Kunde löschen? Bereits erfasste Leistungen bleiben erhalten. Der Kunde kann später wieder aktiviert werden.");
   if (!confirmed) return;
 
-  state.customers = state.customers.filter((c) => c.id !== customerId);
-  state.entries = state.entries.filter((e) => e.customerId !== customerId);
+  customer.deleted = true;
+  if (String(entryCustomer.value || "") === String(customerId)) {
+    clearSelectedCustomer();
+    entryCustomerSearch.value = "";
+  }
 
   if (editingCustomerId === customerId) {
     resetCustomerForm();
@@ -996,15 +1205,26 @@ function deleteCustomer(customerId) {
   renderAll();
 }
 
+function restoreCustomer(customerId) {
+  const customer = state.customers.find((c) => c.id === customerId);
+  if (!customer) return;
+  customer.deleted = false;
+  saveState();
+  renderAll();
+}
+
 function deleteEmployee(employeeId) {
   const employee = state.employees.find((e) => e.id === employeeId);
   if (!employee) return;
 
-  const confirmed = confirm("Mitarbeiter löschen?");
+  const confirmed = confirm("Mitarbeiter löschen? Bereits erfasste Leistungen bleiben erhalten. Der Mitarbeiter kann später wieder aktiviert werden.");
   if (!confirmed) return;
 
-  state.employees = state.employees.filter((e) => e.id !== employeeId);
-  state.entries = state.entries.filter((entry) => entry.employeeId !== employeeId);
+  employee.deleted = true;
+  if (String(entryEmployee.value || "") === String(employeeId)) {
+    clearSelectedEmployee();
+    entryEmployeeSearch.value = "";
+  }
 
   if (editingEmployeeId === employeeId) {
     resetEmployeeForm();
@@ -1014,13 +1234,20 @@ function deleteEmployee(employeeId) {
   renderAll();
 }
 
+function restoreEmployee(employeeId) {
+  const employee = state.employees.find((e) => e.id === employeeId);
+  if (!employee) return;
+  employee.deleted = false;
+  saveState();
+  renderAll();
+}
 function editItem(itemId) {
   const item = state.items.find((i) => i.id === itemId);
   if (!item) return;
 
   itemForm.name.value = item.name || "";
   const typeId = String(item.typeId || findOrCreateCatalogByName(state.productTypes, item.type || "Dienstleistung").id);
-  const unitId = String(item.unitId || findOrCreateCatalogByName(state.units, item.unit || "Stunde/n").id);
+  const unitId = String(item.unitId || findOrCreateCatalogByName(state.units, item.unit || "h").id);
   if (itemTypeSelect) itemTypeSelect.value = typeId;
   if (itemUnitSelect) itemUnitSelect.value = unitId;
   itemForm.price.value = String(item.price ?? "");
@@ -1038,17 +1265,27 @@ function deleteItem(itemId) {
   const item = state.items.find((i) => i.id === itemId);
   if (!item) return;
 
-  const confirmed = confirm("Dienstleistung/Produkt löschen? Zugehörige Erfassungen werden ebenfalls gelöscht.");
+  const confirmed = confirm("Produkt löschen? Bereits erfasste Leistungen bleiben erhalten. Das Produkt kann später wieder aktiviert werden.");
   if (!confirmed) return;
 
-  state.items = state.items.filter((i) => i.id !== itemId);
-  state.entries = state.entries.filter((e) => e.itemId !== itemId);
-  ensureCleaningServiceExists();
+  item.deleted = true;
+  if (String(entryItem.value || "") === String(itemId)) {
+    clearSelectedItem();
+    entryItemSearch.value = "";
+  }
 
   if (editingItemId === itemId) {
     resetItemForm();
   }
 
+  saveState();
+  renderAll();
+}
+
+function restoreItem(itemId) {
+  const item = state.items.find((i) => i.id === itemId);
+  if (!item) return;
+  item.deleted = false;
   saveState();
   renderAll();
 }
@@ -1070,27 +1307,31 @@ function deleteUnit(unitId) {
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit) return;
 
-  const isDefault = ["Stunde/n", "Stück"].includes(unit.name);
+  const isDefault = ["h", "Stk"].includes(unit.name);
   if (isDefault) {
     alert("Standard-Einheiten können nicht gelöscht werden.");
     return;
   }
 
-  const affectedItems = state.items.filter((i) => i.unitId === unitId);
-  const affectedItemIds = new Set(affectedItems.map((i) => i.id));
-  const affectedEntries = state.entries.filter((e) => affectedItemIds.has(e.itemId));
+  const usedByProducts = state.items.filter((i) => i.unitId === unitId && !i.deleted).length;
+  if (usedByProducts > 0) {
+    alert(`Einheit kann nicht gelöscht werden. Sie wird noch von ${usedByProducts} Produkt(en) verwendet.`);
+    return;
+  }
 
-  const confirmed = confirm(
-    `Einheit löschen? Betroffene Produkte: ${affectedItems.length}, betroffene Erfassungen: ${affectedEntries.length}.`
-  );
+  const confirmed = confirm("Einheit wirklich löschen?");
   if (!confirmed) return;
 
-  state.units = state.units.filter((u) => u.id !== unitId);
-  state.items = state.items.filter((i) => i.unitId !== unitId);
-  state.entries = state.entries.filter((e) => !affectedItemIds.has(e.itemId));
-  ensureCleaningServiceExists();
+  unit.deleted = true;
 
   if (editingUnitId === unitId) resetUnitForm();
+  saveState();
+  renderAll();
+}
+function restoreUnit(unitId) {
+  const unit = state.units.find((u) => u.id === unitId);
+  if (!unit) return;
+  unit.deleted = false;
   saveState();
   renderAll();
 }
@@ -1118,21 +1359,25 @@ function deleteProductType(typeId) {
     return;
   }
 
-  const affectedItems = state.items.filter((i) => i.typeId === typeId);
-  const affectedItemIds = new Set(affectedItems.map((i) => i.id));
-  const affectedEntries = state.entries.filter((e) => affectedItemIds.has(e.itemId));
+  const usedByProducts = state.items.filter((i) => i.typeId === typeId && !i.deleted).length;
+  if (usedByProducts > 0) {
+    alert(`Produkttyp kann nicht gelöscht werden. Er wird noch von ${usedByProducts} Produkt(en) verwendet.`);
+    return;
+  }
 
-  const confirmed = confirm(
-    `Produkttyp löschen? Betroffene Produkte: ${affectedItems.length}, betroffene Erfassungen: ${affectedEntries.length}.`
-  );
+  const confirmed = confirm("Produkttyp wirklich löschen?");
   if (!confirmed) return;
 
-  state.productTypes = state.productTypes.filter((t) => t.id !== typeId);
-  state.items = state.items.filter((i) => i.typeId !== typeId);
-  state.entries = state.entries.filter((e) => !affectedItemIds.has(e.itemId));
-  ensureCleaningServiceExists();
+  type.deleted = true;
 
   if (editingProductTypeId === typeId) resetProductTypeForm();
+  saveState();
+  renderAll();
+}
+function restoreProductType(typeId) {
+  const type = state.productTypes.find((t) => t.id === typeId);
+  if (!type) return;
+  type.deleted = false;
   saveState();
   renderAll();
 }
@@ -1194,7 +1439,7 @@ function resetItemForm() {
     itemTypeSelect.value = defaultType?.id || "";
   }
   if (itemUnitSelect) {
-    const defaultUnit = findOrCreateCatalogByName(state.units, "Stunde/n");
+    const defaultUnit = findOrCreateCatalogByName(state.units, "h");
     itemUnitSelect.value = defaultUnit?.id || "";
   }
   itemSubmitBtn.textContent = "Eintrag speichern";
@@ -1244,8 +1489,7 @@ function normalizeImport(parsed) {
   const importedEmployees = Array.isArray(parsed?.employees) ? parsed.employees : [];
   const importedItems = Array.isArray(parsed?.items) ? parsed.items : [];
   const importedEntries = Array.isArray(parsed?.entries) ? parsed.entries : [];
-  const importedUnits = Array.isArray(parsed?.units) ? parsed.units : [];
-  const importedProductTypes = Array.isArray(parsed?.productTypes) ? parsed.productTypes : [];
+    const importedProductTypes = Array.isArray(parsed?.productTypes) ? parsed.productTypes : [];
 
   const customers = importedCustomers.map((c) => ({
     id: c?.id || generateId(),
@@ -1256,29 +1500,27 @@ function normalizeImport(parsed) {
     zip: String(c?.zip || ""),
     city: String(c?.city || ""),
     phone: String(c?.phone || ""),
-    email: String(c?.email || "")
+    email: String(c?.email || ""),
+    deleted: c?.deleted === true || String(c?.deleted || "").toLowerCase() === "true"
   }));
 
-  const units = normalizeNamedCatalog(importedUnits, "Einheit");
-  const productTypes = normalizeNamedCatalog(importedProductTypes, "Produkttyp");
-  ensureCatalogContains(units, "Stunde/n");
-  ensureCatalogContains(units, "Stück");
-  ensureCatalogContains(productTypes, "Dienstleistung");
+  const units = [
+    { id: "unit-h", name: "h" },
+    { id: "unit-stk", name: "Stk" }
+  ];
+  const productTypes = normalizeNamedCatalog(importedProductTypes, "Produkttyp");  ensureCatalogContains(productTypes, "Dienstleistung");
   ensureCatalogContains(productTypes, "Produkt");
 
   const items = importedItems.map((i) => {
     const typeName = normalizeCatalogName(i?.type) || "Dienstleistung";
-    const unitName = normalizeCatalogName(i?.unit) || "Stunde/n";
-    const typeId = String(i?.typeId || "");
+        const typeId = String(i?.typeId || "");
     const unitId = String(i?.unitId || "");
 
     const resolvedTypeId = typeId && productTypes.some((t) => t.id === typeId)
       ? typeId
       : ensureCatalogContains(productTypes, typeName).id;
 
-    const resolvedUnitId = unitId && units.some((u) => u.id === unitId)
-      ? unitId
-      : ensureCatalogContains(units, unitName).id;
+    const resolvedUnitId = unitId === "unit-stk" ? "unit-stk" : "unit-h";
 
     return {
       id: i?.id || generateId(),
@@ -1286,9 +1528,10 @@ function normalizeImport(parsed) {
       typeId: resolvedTypeId,
       unitId: resolvedUnitId,
       type: getCatalogNameById(productTypes, resolvedTypeId) || typeName,
-      unit: getCatalogNameById(units, resolvedUnitId) || unitName,
+      unit: resolvedUnitId === "unit-stk" ? "Stk" : "h",
       price: Number(i?.price) || 0,
-      costPrice: parseAmount(i?.costPrice ?? i?.purchasePrice ?? i?.einstandspreis)
+      costPrice: parseAmount(i?.costPrice ?? i?.purchasePrice ?? i?.einstandspreis),
+      deleted: i?.deleted === true || String(i?.deleted || "").toLowerCase() === "true"
     };
   });
 
@@ -1302,7 +1545,8 @@ function normalizeImport(parsed) {
     phone: String(e?.phone || ""),
     email: String(e?.email || ""),
     iban: String(e?.iban || ""),
-    hourlyWage: parseAmount(e?.hourlyWage)
+    hourlyWage: parseAmount(e?.hourlyWage),
+    deleted: e?.deleted === true || String(e?.deleted || "").toLowerCase() === "true"
   }));
 
   const customerIds = new Set(customers.map((c) => c.id));
@@ -1311,16 +1555,21 @@ function normalizeImport(parsed) {
   const today = new Date().toISOString().slice(0, 10);
 
   const entries = importedEntries
-    .map((e) => ({
-      id: e?.id || generateId(),
-      customerId: String(e?.customerId || ""),
-      employeeId: String(e?.employeeId || ""),
-      itemId: String(e?.itemId || ""),
-      date: String(e?.date || today),
-      quantity: Number(e?.quantity) > 0 ? Number(e.quantity) : 1,
-      note: String(e?.note || ""),
-      unitPrice: parseAmount(e?.unitPrice)
-    }))
+    .map((e) => {
+      const itemId = String(e?.itemId || "");
+      const item = items.find((i) => i.id === itemId);
+      return {
+        id: e?.id || generateId(),
+        customerId: String(e?.customerId || ""),
+        employeeId: String(e?.employeeId || ""),
+        itemId,
+        date: String(e?.date || today),
+        quantity: Number(e?.quantity) > 0 ? Number(e.quantity) : 1,
+        note: String(e?.note || ""),
+        unitPrice: parseAmount(e?.unitPrice),
+        costPrice: normalizeEntryCostPrice(e, item)
+      };
+    })
     .filter((e) => {
       const employeeOk = !e.employeeId || employeeIds.has(e.employeeId);
       return customerIds.has(e.customerId) && itemIds.has(e.itemId) && employeeOk;
@@ -1347,13 +1596,20 @@ function downloadBlob(blob, fileName) {
 
 function renderAll() {
   renderCustomers();
+  renderDeletedCustomers();
   renderEmployees();
+  renderDeletedEmployees();
   renderUnits();
+  renderDeletedUnits();
   renderProductTypes();
+  renderDeletedProductTypes();
   renderItems();
+  renderDeletedItems();
   renderItemTypeUnitSelects();
   renderEntrySelects();
   renderEntries();
+  renderReportOverview();
+  renderProductReportOverview();
   renderSettings();
   renderExportCleanupPreview();
   refreshRequiredFieldStates();
@@ -1454,6 +1710,7 @@ function syncEntrySubmitButtonState() {
   if (unitSubmitBtn) unitSubmitBtn.disabled = !isFormReadyForSubmit(unitForm);
   if (productTypeSubmitBtn) productTypeSubmitBtn.disabled = !isFormReadyForSubmit(productTypeForm);
 }
+
 function setDisplayFieldState(field, isValid) {
   if (!field) return;
   field.classList.toggle("required-empty", !isValid);
@@ -1469,15 +1726,15 @@ function renderSettings() {
   if (currencyCode) currencyCode.value = normalizeCurrency(state?.settings?.currency);
   retentionMonths.value = String(normalizeMonths(state?.settings?.retentionMonths));
 }
-
 function renderCustomers() {
-  if (!state.customers.length) {
-    customerList.innerHTML = "<small>Noch keine Kunden erfasst.</small>";
+  const activeCustomers = state.customers.filter((c) => !c.deleted);
+  if (!activeCustomers.length) {
+    customerList.innerHTML = "<small>Noch keine aktiven Kunden erfasst.</small>";
     return;
   }
 
   const query = normalizeSearchText(customerSearch.value);
-  const visibleCustomers = state.customers.filter((c) => {
+  const visibleCustomers = activeCustomers.filter((c) => {
     if (!query) return true;
     const haystack = normalizeSearchText([
       c.company,
@@ -1493,7 +1750,7 @@ function renderCustomers() {
   });
 
   if (!visibleCustomers.length) {
-    customerList.innerHTML = "<small>Keine Kunden passend zur Suche gefunden.</small>";
+    customerList.innerHTML = "<small>Keine aktiven Kunden passend zur Suche gefunden.</small>";
     return;
   }
 
@@ -1504,7 +1761,7 @@ function renderCustomers() {
         <article class="card">
           <strong>${company}${escapeHtml(c.firstName)} ${escapeHtml(c.lastName)}</strong>
           <small class="customer-address">${escapeHtml(c.street)}, ${escapeHtml(c.zip)} ${escapeHtml(c.city)}</small>
-            <small class="customer-meta">${escapeHtml(c.phone || "")}${c.email ? ` | ${escapeHtml(c.email)}` : ""}</small>
+          <small class="customer-meta">${escapeHtml(c.phone || "")}${c.email ? ` | ${escapeHtml(c.email)}` : ""}</small>
           <div class="card-actions">
             <button type="button" class="secondary" data-action="edit" data-id="${escapeHtml(c.id)}">Bearbeiten</button>
             <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(c.id)}">Löschen</button>
@@ -1515,14 +1772,45 @@ function renderCustomers() {
     .join("");
 }
 
+function renderDeletedCustomers() {
+  if (!deletedCustomerList) return;
+  if (deletedCustomerSummary) deletedCustomerSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Kunden (0)";
+  const query = normalizeSearchText(deletedCustomerSearch?.value || "");
+  const deletedCustomers = state.customers.filter((c) => {
+    if (!c.deleted) return false;
+    if (!query) return true;
+    const haystack = normalizeSearchText([c.company, c.firstName, c.lastName, c.street, c.zip, c.city, c.phone, c.email].join(" "));
+    return haystack.includes(query);
+  });
+  if (deletedCustomerSummary) deletedCustomerSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Kunden (" + deletedCustomers.length + ")";
+  if (!deletedCustomers.length) {
+    deletedCustomerList.innerHTML = "<small>Keine gelöschten Kunden passend zur Suche gefunden.</small>";
+    return;
+  }
+  deletedCustomerList.innerHTML = deletedCustomers
+    .map((c) => {
+      const company = c.company ? `${escapeHtml(c.company)} - ` : "";
+      return `
+        <article class="card">
+          <strong>${company}${escapeHtml(c.firstName)} ${escapeHtml(c.lastName)}</strong>
+          <div class="card-actions">
+            <button type="button" class="secondary" data-action="restore" data-id="${escapeHtml(c.id)}">Wieder aktivieren</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderEmployees() {
-  if (!state.employees.length) {
-    employeeList.innerHTML = "<small>Noch keine Mitarbeiter erfasst.</small>";
+  const activeEmployees = state.employees.filter((e) => !e.deleted);
+  if (!activeEmployees.length) {
+    employeeList.innerHTML = "<small>Noch keine aktiven Mitarbeiter erfasst.</small>";
     return;
   }
 
   const query = normalizeSearchText(employeeSearch.value);
-  const visibleEmployees = state.employees.filter((e) => {
+  const visibleEmployees = activeEmployees.filter((e) => {
     if (!query) return true;
     const haystack = normalizeSearchText([
       e.firstName,
@@ -1538,7 +1826,7 @@ function renderEmployees() {
   });
 
   if (!visibleEmployees.length) {
-    employeeList.innerHTML = "<small>Keine Mitarbeiter passend zur Suche gefunden.</small>";
+    employeeList.innerHTML = "<small>Keine aktiven Mitarbeiter passend zur Suche gefunden.</small>";
     return;
   }
 
@@ -1560,21 +1848,51 @@ function renderEmployees() {
     .join("");
 }
 
+function renderDeletedEmployees() {
+  if (!deletedEmployeeList) return;
+  if (deletedEmployeeSummary) deletedEmployeeSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Mitarbeiter (0)";
+  const query = normalizeSearchText(deletedEmployeeSearch?.value || "");
+  const deletedEmployees = state.employees.filter((e) => {
+    if (!e.deleted) return false;
+    if (!query) return true;
+    const haystack = normalizeSearchText([e.firstName, e.lastName, e.street, e.zip, e.city, e.phone, e.email, e.iban].join(" "));
+    return haystack.includes(query);
+  });
+  if (deletedEmployeeSummary) deletedEmployeeSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Mitarbeiter (" + deletedEmployees.length + ")";
+  if (!deletedEmployees.length) {
+    deletedEmployeeList.innerHTML = "<small>Keine gelöschten Mitarbeiter passend zur Suche gefunden.</small>";
+    return;
+  }
+  deletedEmployeeList.innerHTML = deletedEmployees
+    .map((e) => {
+      const fullName = `${e.firstName || ""} ${e.lastName || ""}`.trim();
+      return `
+        <article class="card">
+          <strong>${escapeHtml(fullName)}</strong>
+          <div class="card-actions">
+            <button type="button" class="secondary" data-action="restore" data-id="${escapeHtml(e.id)}">Wieder aktivieren</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
 function renderUnits() {
   if (!unitList) return;
-  if (!state.units.length) {
-    unitList.innerHTML = "<small>Noch keine Einheiten erfasst.</small>";
+  const activeUnits = state.units.filter((u) => !u.deleted);
+  if (!activeUnits.length) {
+    unitList.innerHTML = "<small>Noch keine aktiven Einheiten erfasst.</small>";
     return;
   }
 
   const query = normalizeSearchText(unitSearch?.value);
-  const visible = state.units.filter((u) => {
+  const visible = activeUnits.filter((u) => {
     if (!query) return true;
     return normalizeSearchText(u.name).includes(query);
   });
 
   if (!visible.length) {
-    unitList.innerHTML = "<small>Keine Einheiten passend zur Suche gefunden.</small>";
+    unitList.innerHTML = "<small>Keine aktiven Einheiten passend zur Suche gefunden.</small>";
     return;
   }
 
@@ -1591,21 +1909,44 @@ function renderUnits() {
     .join("");
 }
 
+function renderDeletedUnits() {
+  if (!deletedUnitList) return;
+  if (deletedUnitSummary) deletedUnitSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Einheiten (0)";
+  const query = normalizeSearchText(deletedUnitSearch?.value || "");
+  const deletedUnits = state.units.filter((u) => u.deleted && (!query || normalizeSearchText(u.name).includes(query)));
+  if (deletedUnitSummary) deletedUnitSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Einheiten (" + deletedUnits.length + ")";
+  if (!deletedUnits.length) {
+    deletedUnitList.innerHTML = "<small>Keine gelöschten Einheiten passend zur Suche gefunden.</small>";
+    return;
+  }
+  deletedUnitList.innerHTML = deletedUnits
+    .map((u) => `
+      <article class="card">
+        <strong>${escapeHtml(u.name)}</strong>
+        <div class="card-actions">
+          <button type="button" class="secondary" data-action="restore" data-id="${escapeHtml(u.id)}">Wieder aktivieren</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
 function renderProductTypes() {
   if (!productTypeList) return;
-  if (!state.productTypes.length) {
-    productTypeList.innerHTML = "<small>Noch keine Produkttypen erfasst.</small>";
+  const activeTypes = state.productTypes.filter((t) => !t.deleted);
+  if (!activeTypes.length) {
+    productTypeList.innerHTML = "<small>Noch keine aktiven Produkttypen erfasst.</small>";
     return;
   }
 
   const query = normalizeSearchText(productTypeSearch?.value);
-  const visible = state.productTypes.filter((t) => {
+  const visible = activeTypes.filter((t) => {
     if (!query) return true;
     return normalizeSearchText(t.name).includes(query);
   });
 
   if (!visible.length) {
-    productTypeList.innerHTML = "<small>Keine Produkttypen passend zur Suche gefunden.</small>";
+    productTypeList.innerHTML = "<small>Keine aktiven Produkttypen passend zur Suche gefunden.</small>";
     return;
   }
 
@@ -1622,13 +1963,38 @@ function renderProductTypes() {
     .join("");
 }
 
+function renderDeletedProductTypes() {
+  if (!deletedProductTypeList) return;
+  if (deletedProductTypeSummary) deletedProductTypeSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Produkttypen (0)";
+  const query = normalizeSearchText(deletedProductTypeSearch?.value || "");
+  const deletedTypes = state.productTypes.filter((t) => t.deleted && (!query || normalizeSearchText(t.name).includes(query)));
+  if (deletedProductTypeSummary) deletedProductTypeSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Produkttypen (" + deletedTypes.length + ")";
+  if (!deletedTypes.length) {
+    deletedProductTypeList.innerHTML = "<small>Keine gelöschten Produkttypen passend zur Suche gefunden.</small>";
+    return;
+  }
+  deletedProductTypeList.innerHTML = deletedTypes
+    .map((t) => `
+      <article class="card">
+        <strong>${escapeHtml(t.name)}</strong>
+        <div class="card-actions">
+          <button type="button" class="secondary" data-action="restore" data-id="${escapeHtml(t.id)}">Wieder aktivieren</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
 function renderItemTypeUnitSelects() {
+  const activeTypes = state.productTypes.filter((type) => !type.deleted);
+  const activeUnits = state.units.filter((unit) => !unit.deleted);
+
   if (itemTypeSelect) {
     const previousTypeId = itemTypeSelect.value;
-    itemTypeSelect.innerHTML = state.productTypes
+    itemTypeSelect.innerHTML = activeTypes
       .map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.name)}</option>`)
       .join("");
-    if (state.productTypes.some((type) => type.id === previousTypeId)) {
+    if (activeTypes.some((type) => type.id === previousTypeId)) {
       itemTypeSelect.value = previousTypeId;
     } else {
       itemTypeSelect.value = findOrCreateCatalogByName(state.productTypes, "Dienstleistung").id;
@@ -1637,25 +2003,26 @@ function renderItemTypeUnitSelects() {
 
   if (itemUnitSelect) {
     const previousUnitId = itemUnitSelect.value;
-    itemUnitSelect.innerHTML = state.units
+    itemUnitSelect.innerHTML = activeUnits
       .map((unit) => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`)
       .join("");
-    if (state.units.some((unit) => unit.id === previousUnitId)) {
+    if (activeUnits.some((unit) => unit.id === previousUnitId)) {
       itemUnitSelect.value = previousUnitId;
     } else {
-      itemUnitSelect.value = findOrCreateCatalogByName(state.units, "Stunde/n").id;
+      itemUnitSelect.value = findOrCreateCatalogByName(state.units, "h").id;
     }
   }
 }
 
 function renderItems() {
-  if (!state.items.length) {
-    itemList.innerHTML = "<small>Noch keine Dienstleistungen/Produkte erfasst.</small>";
+  const activeItems = state.items.filter((i) => !i.deleted);
+  if (!activeItems.length) {
+    itemList.innerHTML = "<small>Noch keine aktiven Produkte erfasst.</small>";
     return;
   }
 
   const query = normalizeSearchText(itemSearch.value);
-  const visibleItems = state.items.filter((i) => {
+  const visibleItems = activeItems.filter((i) => {
     if (!query) return true;
     const haystack = normalizeSearchText([
       i.name,
@@ -1668,7 +2035,7 @@ function renderItems() {
   });
 
   if (!visibleItems.length) {
-    itemList.innerHTML = "<small>Keine Dienstleistungen/Produkte passend zur Suche gefunden.</small>";
+    itemList.innerHTML = "<small>Keine aktiven Produkte passend zur Suche gefunden.</small>";
     return;
   }
 
@@ -1688,16 +2055,44 @@ function renderItems() {
     .join("");
 }
 
+function renderDeletedItems() {
+  if (!deletedItemList) return;
+  if (deletedItemSummary) deletedItemSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Produkte (0)";
+  const query = normalizeSearchText(deletedItemSearch?.value || "");
+  const deletedItems = state.items.filter((i) => {
+    if (!i.deleted) return false;
+    if (!query) return true;
+    const haystack = normalizeSearchText([i.name, getItemTypeName(i), getItemUnitName(i), String(i.price), String(i.costPrice ?? "")].join(" "));
+    return haystack.includes(query);
+  });
+  if (deletedItemSummary) deletedItemSummary.textContent = "Gelöschte aber in der Leistungserfassung noch verwendete Produkte (" + deletedItems.length + ")";
+  if (!deletedItems.length) {
+    deletedItemList.innerHTML = "<small>Keine gelöschten Produkte passend zur Suche gefunden.</small>";
+    return;
+  }
+  deletedItemList.innerHTML = deletedItems
+    .map((i) => `
+      <article class="card">
+        <strong>${escapeHtml(i.name)}</strong>
+        <small>${escapeHtml(getItemTypeName(i))} | ${formatCurrency(i.price)} / ${escapeHtml(getItemUnitName(i))}${i.costPrice != null ? ` | Einstand: ${formatCurrency(i.costPrice)}` : ""}</small>
+        <div class="card-actions">
+          <button type="button" class="secondary" data-action="restore" data-id="${escapeHtml(i.id)}">Wieder aktivieren</button>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
 function renderEntrySelects() {
-  const selectedCustomerExists = state.customers.some((c) => c.id === entryCustomer.value);
+  const selectedCustomerExists = state.customers.some((c) => !c.deleted && c.id === entryCustomer.value);
   if (!selectedCustomerExists) {
     clearSelectedCustomer();
   }
-  const selectedEmployeeExists = state.employees.some((e) => e.id === entryEmployee.value);
+  const selectedEmployeeExists = state.employees.some((e) => !e.deleted && e.id === entryEmployee.value);
   if (!selectedEmployeeExists) {
     clearSelectedEmployee();
   }
-  const selectedItemExists = state.items.some((item) => item.id === entryItem.value);
+  const selectedItemExists = state.items.some((item) => !item.deleted && item.id === entryItem.value);
   if (!selectedItemExists) {
     clearSelectedItem();
   }
@@ -1728,7 +2123,7 @@ function updateEntryQuantityConstraints() {
 
 function isPieceUnitSelected() {
   const selectedItem = state.items.find((item) => item.id === entryItem.value);
-  return getItemUnitName(selectedItem) === "Stück";
+  return getItemUnitName(selectedItem) === "Stk";
 }
 
 function resetEntryCustomerSelection() {
@@ -1810,7 +2205,7 @@ function renderEntries() {
         .map((e) => {
           const item = state.items.find((i) => i.id === e.itemId);
           const employee = state.employees.find((emp) => emp.id === e.employeeId);
-          const itemName = item ? item.name : "Unbekannter Eintrag";
+          const itemName = item ? `${item.name}${item.deleted ? " (gelöscht)" : ""}` : "Unbekannter Eintrag";
           const employeeName = employee ? `${employee.firstName || ""} ${employee.lastName || ""}`.trim() : "Unbekannter Mitarbeiter";
           const unitPrice = e.unitPrice != null ? e.unitPrice : resolveEntryUnitPrice(item);
           const total = unitPrice * e.quantity;
@@ -1870,7 +2265,302 @@ function resolveEntryUnitPrice(item) {
   return Number(item.price) || 0;
 }
 
+function resolveEntryCostPrice(item) {
+  if (!item) return null;
+  return parseAmount(item.costPrice);
+}
 
+function normalizeEntryCostPrice(entry, item) {
+  const snapshot = parseAmount(
+    entry?.costPrice ??
+    entry?.unitCostPrice ??
+    entry?.costPriceSnapshot ??
+    entry?.einstandspreis ??
+    entry?.purchasePrice
+  );
+  if (snapshot != null) return snapshot;
+  return resolveEntryCostPrice(item);
+}
+
+
+
+function wireReportOverview() {
+  if (!reportMonth) return;
+  const rerender = () => {
+    renderReportOverview();
+    renderProductReportOverview();
+  };
+  reportMonth.addEventListener("change", rerender);
+  reportMonth.addEventListener("input", rerender);
+  setDefaultReportMonth();
+}
+
+function setDefaultReportMonth() {
+  if (!reportMonth) return;
+  if (!String(reportMonth.value || "").trim()) {
+    reportMonth.value = new Date().toISOString().slice(0, 7);
+  }
+}
+
+function formatMonthCH(month) {
+  const [year, m] = String(month || "").split("-");
+  if (!year || !m) return String(month || "");
+  return `${m}.${year}`;
+}
+
+function renderReportOverview() {
+  if (!reportCalendar || !reportMonth) return;
+  const month = String(reportMonth.value || "").trim();
+  if (!month) {
+    reportCalendar.innerHTML = "<small>Bitte Monat wählen.</small>";
+    return;
+  }
+
+  const monthMatch = month.match(/^(\d{4})-(\d{2})$/);
+  if (!monthMatch) {
+    reportCalendar.innerHTML = "<small>Ungültiger Monat.</small>";
+    return;
+  }
+
+  const year = Number(monthMatch[1]);
+  const monthIndex = Number(monthMatch[2]) - 1;
+  const lastDate = new Date(year, monthIndex + 1, 0).getDate();
+
+  const byDay = new Map();
+  const monthEntries = state.entries.filter((entry) => String(entry?.date || "").startsWith(`${month}-`));
+
+  const getCustomerShort = (customer) => {
+    if (!customer) return "Unbekannter Kunde";
+    const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+    if (customer.company && name) return `${customer.company} - ${name}`;
+    return customer.company || name || "Unbekannter Kunde";
+  };
+
+  const getEmployeeShort = (employee) => {
+    if (!employee) return "Nicht zugewiesen";
+    const name = `${employee.firstName || ""} ${employee.lastName || ""}`.trim();
+    return name || "Nicht zugewiesen";
+  };
+
+  monthEntries.forEach((entry) => {
+    const item = state.items.find((i) => i.id === entry.itemId);
+    const unit = String(getItemUnitName(item) || "").trim().toLowerCase();
+    if (!["h", "std", "stunde", "stunden", "stunde/n"].includes(unit)) return;
+
+    const date = String(entry?.date || "").slice(0, 10);
+    const customer = state.customers.find((c) => c.id === String(entry.customerId || ""));
+    const customerName = getCustomerShort(customer);
+
+    const employee = state.employees.find((e) => e.id === String(entry.employeeId || ""));
+    const employeeName = getEmployeeShort(employee);
+
+    const qty = Number(entry.quantity) || 0;
+    const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
+    const lineTotal = qty * unitPrice;
+
+    if (!byDay.has(date)) byDay.set(date, new Map());
+    const dayMap = byDay.get(date);
+
+    const key = `${customerName}|||${employeeName}|||${unitPrice}`;
+    const current = dayMap.get(key) || { customerName, employeeName, qty: 0, unitPrice, amount: 0 };
+    current.qty += qty;
+    current.amount += lineTotal;
+    dayMap.set(key, current);
+  });
+
+  const shortWeekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+  const body = Array.from({ length: lastDate }, (_, offset) => {
+    const day = offset + 1;
+    const isoDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayMap = byDay.get(isoDate) || new Map();
+    const rows = [...dayMap.values()].sort((a, b) => b.amount - a.amount || a.customerName.localeCompare(b.customerName, "de-CH"));
+    const totalHours = rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+    const totalAmount = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+
+    const weekdayIndex = new Date(year, monthIndex, day).getDay();
+    const weekdayShort = shortWeekdays[weekdayIndex] || "";
+    const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
+
+    const rowsHtml = rows
+      .map((row) => `
+        <li class="hours-calendar-row hours-money-row">
+          <span class="col-customer">${escapeHtml(row.customerName)}</span>
+          <span class="col-employee">${escapeHtml(row.employeeName)}</span>
+          <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))} h</strong>
+          <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
+          <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
+        </li>
+      `)
+      .join("");
+
+    const detailsHtml = rows.length
+      ? `
+        <div class="hours-calendar-cell-columns hours-money-columns"><span>Kunde</span><span>Mitarbeiter</span><span>Stunden</span><span>Ansatz</span><span>Total</span></div>
+        <ul class="hours-calendar-list">${rowsHtml}</ul>
+        <div class="hours-calendar-total hours-money-total">
+          <span>Total</span>
+          <strong>${escapeHtml(String((Math.round((totalHours || 0) * 100) / 100).toLocaleString("de-CH")))} h</strong>
+          <strong>${escapeHtml(formatCurrency(totalAmount))}</strong>
+        </div>
+      `
+      : `<div class="hours-day-empty">Keine Erfassung</div>`;
+
+    const classes = ["hours-day-card"];
+    if (rows.length) classes.push("has-data"); else classes.push("no-data");
+    if (isWeekend) classes.push("is-weekend");
+
+    return `
+      <article class="${classes.join(" ")}">
+        <div class="hours-day-meta">
+          <span class="day-weekday">${escapeHtml(weekdayShort)}</span>
+          <span class="day-no">${day}</span>
+          <span class="day-date">${escapeHtml(formatDateCH(isoDate))}</span>
+        </div>
+        <div class="hours-day-content">
+          ${detailsHtml}
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  reportCalendar.innerHTML = `
+    <h3>Stunden ${escapeHtml(formatMonthCH(month))}</h3>
+    <div class="hours-day-list">${body}</div>
+  `;
+}
+function renderProductReportOverview() {
+  if (!reportCalendarProducts || !reportMonth) return;
+  const month = String(reportMonth.value || "").trim();
+  if (!month) {
+    reportCalendarProducts.innerHTML = "<small>Bitte Monat wählen.</small>";
+    return;
+  }
+
+  const monthMatch = month.match(/^(\d{4})-(\d{2})$/);
+  if (!monthMatch) {
+    reportCalendarProducts.innerHTML = "<small>Ungültiger Monat.</small>";
+    return;
+  }
+
+  const year = Number(monthMatch[1]);
+  const monthIndex = Number(monthMatch[2]) - 1;
+  const lastDate = new Date(year, monthIndex + 1, 0).getDate();
+
+  const byDay = new Map();
+  const monthEntries = state.entries.filter((entry) => String(entry?.date || "").startsWith(`${month}-`));
+
+  const getCustomerShort = (customer) => {
+    if (!customer) return "Unbekannter Kunde";
+    const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+    if (customer.company && name) return `${customer.company} - ${name}`;
+    return customer.company || name || "Unbekannter Kunde";
+  };
+
+  monthEntries.forEach((entry) => {
+    const item = state.items.find((i) => i.id === entry.itemId);
+
+    const normalizeUnitToken = (value) => String(value || "")
+      .trim()
+      .toLowerCase()
+      .replaceAll("ä", "ae")
+      .replaceAll("ö", "oe")
+      .replaceAll("ü", "ue")
+      .replaceAll(".", "")
+      .replaceAll("/", "")
+      .replaceAll(" ", "");
+
+    const unitTokens = [
+      item?.unitId,
+      item?.unit,
+      entry?.unitId,
+      entry?.unit,
+      getItemUnitName(item)
+    ].map(normalizeUnitToken).filter(Boolean);
+
+    const isPieceUnit = unitTokens.some((token) => ["unit-stk", "stk", "stueck", "stuck"].includes(token));
+    if (!isPieceUnit) return;
+
+    const date = String(entry?.date || "").slice(0, 10);
+    const customer = state.customers.find((c) => c.id === String(entry.customerId || ""));
+    const customerName = getCustomerShort(customer);
+    const itemName = item?.name ? String(item.name) : "Unbekanntes Produkt";
+
+    const qty = Number(entry.quantity) || 0;
+    const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
+    const amount = qty * unitPrice;
+
+    if (!byDay.has(date)) byDay.set(date, new Map());
+    const dayMap = byDay.get(date);
+
+    const key = `${customerName}|||${itemName}|||${unitPrice}`;
+    const current = dayMap.get(key) || { customerName, itemName, qty: 0, unitPrice, amount: 0 };
+    current.qty += qty;
+    current.amount += amount;
+    dayMap.set(key, current);
+  });
+
+  const shortWeekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+  const body = Array.from({ length: lastDate }, (_, offset) => {
+    const day = offset + 1;
+    const isoDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayMap = byDay.get(isoDate) || new Map();
+    const rows = [...dayMap.values()].sort((a, b) => b.amount - a.amount || a.customerName.localeCompare(b.customerName, "de-CH"));
+    const totalQty = rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+    const totalAmount = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+
+    const weekdayIndex = new Date(year, monthIndex, day).getDay();
+    const weekdayShort = shortWeekdays[weekdayIndex] || "";
+    const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
+
+    const rowsHtml = rows
+      .map((row) => `
+        <li class="hours-calendar-row hours-money-row products-row">
+          <span class="col-customer">${escapeHtml(row.customerName)}</span>
+          <span class="col-employee">${escapeHtml(row.itemName)}</span>
+          <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))} Stk</strong>
+          <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
+          <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
+        </li>
+      `)
+      .join("");
+
+    const detailsHtml = rows.length
+      ? `
+        <div class="hours-calendar-cell-columns hours-money-columns products-columns"><span>Kunde</span><span>Produkt</span><span>Stk</span><span>Ansatz</span><span>Total</span></div>
+        <ul class="hours-calendar-list">${rowsHtml}</ul>
+        <div class="hours-calendar-total hours-money-total products-total">
+          <span>Total</span>
+          <strong>${escapeHtml(String((Math.round((totalQty || 0) * 100) / 100).toLocaleString("de-CH")))} Stk</strong>
+          <strong>${escapeHtml(formatCurrency(totalAmount))}</strong>
+        </div>
+      `
+      : `<div class="hours-day-empty">Keine Erfassung</div>`;
+
+    const classes = ["hours-day-card"];
+    if (rows.length) classes.push("has-data"); else classes.push("no-data");
+    if (isWeekend) classes.push("is-weekend");
+
+    return `
+      <article class="${classes.join(" ")}">
+        <div class="hours-day-meta">
+          <span class="day-weekday">${escapeHtml(weekdayShort)}</span>
+          <span class="day-no">${day}</span>
+          <span class="day-date">${escapeHtml(formatDateCH(isoDate))}</span>
+        </div>
+        <div class="hours-day-content">
+          ${detailsHtml}
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  reportCalendarProducts.innerHTML = `
+    <h3>Produkte ${escapeHtml(formatMonthCH(month))}</h3>
+    <div class="hours-day-list">${body}</div>
+  `;
+}
 function formatDateCH(isoDate) {
   if (!isoDate) return "";
   const parts = String(isoDate).split("-");
@@ -1904,6 +2594,7 @@ function escapeHtml(value) {
 function renderCustomerSuggestions(queryValue) {
   const query = normalizeSearchText(queryValue);
   const filtered = state.customers.filter((c) => {
+    if (c.deleted) return false;
     if (!query) return true;
     const haystack = normalizeSearchText([
       c.company,
@@ -1935,6 +2626,7 @@ function renderCustomerSuggestions(queryValue) {
 function renderEmployeeSuggestions(queryValue) {
   const query = normalizeSearchText(queryValue);
   const filtered = state.employees.filter((e) => {
+    if (e.deleted) return false;
     if (!query) return true;
     const haystack = normalizeSearchText([
       e.firstName,
@@ -1965,6 +2657,7 @@ function renderEmployeeSuggestions(queryValue) {
 function renderItemSuggestions(queryValue) {
   const query = normalizeSearchText(queryValue);
   const filtered = state.items.filter((item) => {
+    if (item.deleted) return false;
     if (!query) return true;
     const haystack = normalizeSearchText([
       item.name,
@@ -2088,10 +2781,10 @@ function normalizeNamedCatalog(values, fallbackPrefix) {
     const key = normalizeSearchText(name);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    list.push({ id: String(raw?.id || generateId()), name });
+    list.push({ id: String(raw?.id || generateId()), name, deleted: raw?.deleted === true || String(raw?.deleted || "").toLowerCase() === "true" });
   }
   if (!list.length && fallbackPrefix) {
-    list.push({ id: generateId(), name: fallbackPrefix });
+    list.push({ id: generateId(), name: fallbackPrefix, deleted: false });
   }
   return list;
 }
@@ -2105,9 +2798,10 @@ function ensureCatalogContains(list, name) {
   const normalized = normalizeCatalogName(name);
   let found = findCatalogByName(list, normalized);
   if (!found) {
-    found = { id: generateId(), name: normalized };
+    found = { id: generateId(), name: normalized, deleted: false };
     list.push(found);
   }
+  if (found.deleted) found.deleted = false;
   return found;
 }
 
@@ -2138,7 +2832,7 @@ function getItemUnitName(item) {
 }
 
 function setSelectedCustomer(customerId) {
-  const customer = state.customers.find((c) => c.id === customerId);
+  const customer = state.customers.find((c) => !c.deleted && c.id === customerId);
   if (!customer) {
     clearSelectedCustomer();
     return;
@@ -2149,7 +2843,7 @@ function setSelectedCustomer(customerId) {
 }
 
 function setSelectedEmployee(employeeId) {
-  const employee = state.employees.find((e) => e.id === employeeId);
+  const employee = state.employees.find((e) => !e.deleted && e.id === employeeId);
   if (!employee) {
     clearSelectedEmployee();
     return;
@@ -2191,36 +2885,17 @@ function clearSelectedEmployee() {
 }
 
 function ensureCleaningServiceExists() {
-  ensureCatalogContains(state.units, "Stunde/n");
-  ensureCatalogContains(state.units, "Stück");
+  enforceFixedUnitsCatalog();
   ensureCatalogContains(state.productTypes, "Dienstleistung");
   ensureCatalogContains(state.productTypes, "Produkt");
 
-  const exists = state.items.some((item) => normalizeSearchText(item.name) === normalizeSearchText("Reinigungsarbeiten"));
-  if (exists) {
-    state.items.forEach((item) => {
-      item.typeId = item.typeId || findOrCreateCatalogByName(state.productTypes, item.type || "Dienstleistung").id;
-      item.unitId = item.unitId || findOrCreateCatalogByName(state.units, item.unit || "Stunde/n").id;
-      item.type = getItemTypeName(item);
-      item.unit = getItemUnitName(item);
-      item.costPrice = parseAmount(item.costPrice ?? item.purchasePrice ?? item.einstandspreis);
-    });
-    return;
-  }
-
-  const defaultType = findOrCreateCatalogByName(state.productTypes, "Dienstleistung");
-  const defaultUnit = findOrCreateCatalogByName(state.units, "Stunde/n");
-  state.items.push({
-    id: generateId(),
-    name: "Reinigungsarbeiten",
-    typeId: defaultType.id,
-    unitId: defaultUnit.id,
-    type: defaultType.name,
-    unit: defaultUnit.name,
-    price: 35,
-    costPrice: null
+  state.items.forEach((item) => {
+    item.typeId = item.typeId || findOrCreateCatalogByName(state.productTypes, item.type || "Dienstleistung").id;
+    if (item.unitId !== "unit-h" && item.unitId !== "unit-stk") item.unitId = "unit-h";
+    item.type = getItemTypeName(item);
+    item.unit = item.unitId === "unit-stk" ? "Stk" : "h";
+    item.costPrice = parseAmount(item.costPrice ?? item.purchasePrice ?? item.einstandspreis);
   });
-  saveState();
 }
 
 function normalizeCurrency(value) {
@@ -2235,15 +2910,65 @@ function normalizeMonths(value) {
 }
 
 function pruneOldEntriesForExport() {
-  const removedEntries = listOldEntriesForExport();
-  if (!removedEntries.length) return [];
-  const idsToRemove = new Set(removedEntries.map((entry) => entry.id));
-  state.entries = state.entries.filter((entry) => !idsToRemove.has(entry.id));
-  if (removedEntries.length > 0) {
-    saveState();
-    renderEntries();
+  const plan = listExportCleanupPlan();
+  const entryIdsToRemove = new Set(plan.entries.map((entry) => entry.id));
+  const customerIdsToRemove = new Set(plan.customers.map((customer) => customer.id));
+  const employeeIdsToRemove = new Set(plan.employees.map((employee) => employee.id));
+  const itemIdsToRemove = new Set(plan.items.map((item) => item.id));
+  const unitIdsToRemove = new Set(plan.units.map((unit) => unit.id));
+  const typeIdsToRemove = new Set(plan.productTypes.map((type) => type.id));
+
+  const hasChanges = entryIdsToRemove.size || customerIdsToRemove.size || employeeIdsToRemove.size || itemIdsToRemove.size || unitIdsToRemove.size || typeIdsToRemove.size;
+  if (!hasChanges) {
+    return { entries: [], customers: [], employees: [], items: [], units: [], productTypes: [] };
   }
-  return removedEntries;
+
+  if (entryIdsToRemove.size) {
+    state.entries = state.entries.filter((entry) => !entryIdsToRemove.has(entry.id));
+  }
+  if (customerIdsToRemove.size) {
+    state.customers = state.customers.filter((customer) => !customerIdsToRemove.has(customer.id));
+  }
+  if (employeeIdsToRemove.size) {
+    state.employees = state.employees.filter((employee) => !employeeIdsToRemove.has(employee.id));
+  }
+  if (itemIdsToRemove.size) {
+    state.items = state.items.filter((item) => !itemIdsToRemove.has(item.id));
+  }
+  if (unitIdsToRemove.size) {
+    state.units = state.units.filter((unit) => !unitIdsToRemove.has(unit.id));
+  }
+  if (typeIdsToRemove.size) {
+    state.productTypes = state.productTypes.filter((type) => !typeIdsToRemove.has(type.id));
+  }
+
+  saveState();
+  renderAll();
+
+  return plan;
+}
+
+function listExportCleanupPlan() {
+  const entries = listOldEntriesForExport();
+  const entryIdsToRemove = new Set(entries.map((entry) => entry.id));
+  const remainingEntries = state.entries.filter((entry) => !entryIdsToRemove.has(entry.id));
+
+  const usedCustomerIds = new Set(remainingEntries.map((entry) => String(entry.customerId || "")).filter(Boolean));
+  const usedEmployeeIds = new Set(remainingEntries.map((entry) => String(entry.employeeId || "")).filter(Boolean));
+  const usedItemIds = new Set(remainingEntries.map((entry) => String(entry.itemId || "")).filter(Boolean));
+  const customers = state.customers.filter((customer) => customer.deleted && !usedCustomerIds.has(String(customer.id || "")));
+  const employees = state.employees.filter((employee) => employee.deleted && !usedEmployeeIds.has(String(employee.id || "")));
+  const items = state.items.filter((item) => item.deleted && !usedItemIds.has(String(item.id || "")));
+  const itemIdsToRemove = new Set(items.map((item) => item.id));
+
+  const remainingItems = state.items.filter((item) => !itemIdsToRemove.has(item.id));
+  const usedUnitIds = new Set(remainingItems.map((item) => String(item.unitId || "")).filter(Boolean));
+  const usedTypeIds = new Set(remainingItems.map((item) => String(item.typeId || "")).filter(Boolean));
+
+  const units = state.units.filter((unit) => unit.deleted && !usedUnitIds.has(String(unit.id || "")));
+  const productTypes = state.productTypes.filter((type) => type.deleted && !usedTypeIds.has(String(type.id || "")));
+
+  return { entries, customers, employees, items, units, productTypes };
 }
 
 function listOldEntriesForExport() {
@@ -2262,37 +2987,155 @@ function listOldEntriesForExport() {
 }
 
 function renderExportCleanupPreview() {
-  renderExportCleanupResult(listOldEntriesForExport());
+  renderExportCleanupResult(listExportCleanupPlan());
 }
 
-function renderExportCleanupResult(entries) {
-  const removed = Array.isArray(entries) ? entries : [];
-  if (!removed.length) {
+function renderExportCleanupResult(plan) {
+  const cleanupPlan = plan || { entries: [], customers: [], employees: [], items: [], units: [], productTypes: [] };
+  const removedEntries = Array.isArray(cleanupPlan.entries) ? cleanupPlan.entries : [];
+  const removedCustomers = Array.isArray(cleanupPlan.customers) ? cleanupPlan.customers : [];
+  const removedEmployees = Array.isArray(cleanupPlan.employees) ? cleanupPlan.employees : [];
+  const removedItems = Array.isArray(cleanupPlan.items) ? cleanupPlan.items : [];
+  const removedUnits = Array.isArray(cleanupPlan.units) ? cleanupPlan.units : [];
+  const removedTypes = Array.isArray(cleanupPlan.productTypes) ? cleanupPlan.productTypes : [];
+  const months = normalizeMonths(state?.settings?.retentionMonths);
+
+  if (!removedEntries.length && !removedCustomers.length && !removedEmployees.length && !removedItems.length && !removedUnits.length && !removedTypes.length) {
     exportCleanupResult.hidden = true;
     exportCleanupList.innerHTML = "";
     return;
   }
+
+  const sections = [];
+
+  if (removedEntries.length) {
+    const entriesHtml = removedEntries
+      .slice()
+      .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+      .map((entry) => {
+        const customer = state.customers.find((c) => c.id === entry.customerId);
+        const item = state.items.find((i) => i.id === entry.itemId);
+        const customerName = customer ? getCustomerDisplay(customer) : "Unbekannter Kunde";
+        const itemLabel = item ? item.name : "Unbekannte Leistung";
+        const unit = getItemUnitName(item);
+        const qty = Number(entry.quantity) || 0;
+        return `
+          <article class="cleanup-result-row">
+            <strong>${escapeHtml(formatDateCH(entry.date || ""))}</strong><br>
+            ${escapeHtml(customerName)}<br>
+            ${escapeHtml(itemLabel)} | ${escapeHtml(String(qty))} ${escapeHtml(unit)}
+          </article>
+        `;
+      })
+      .join("");
+    sections.push(`<details class="cleanup-details"><summary>Erfasste Leistungen, die beim Export gelöscht werden da sie älter als ${months} Monate sind (Einstellung Datenbereinigung) (${removedEntries.length})</summary>${entriesHtml}</details>`);
+  }
+
+  if (removedCustomers.length) {
+    const customerHtml = removedCustomers
+      .map((customer) => `<article class="cleanup-result-row">${escapeHtml(getCustomerDisplay(customer) || "Unbekannter Kunde")}</article>`)
+      .join("");
+    sections.push(`<details class="cleanup-details"><summary>Gelöschte Kunden ohne Abhängigkeiten (${removedCustomers.length})</summary>${customerHtml}</details>`);
+  }
+
+  if (removedEmployees.length) {
+    const employeeHtml = removedEmployees
+      .map((employee) => `<article class="cleanup-result-row">${escapeHtml(getEmployeeDisplay(employee) || "Unbekannter Mitarbeiter")}</article>`)
+      .join("");
+    sections.push(`<details class="cleanup-details"><summary>Gelöschte Mitarbeiter ohne Abhängigkeiten (${removedEmployees.length})</summary>${employeeHtml}</details>`);
+  }
+
+  if (removedItems.length) {
+    const itemHtml = removedItems
+      .map((item) => `<article class="cleanup-result-row">${escapeHtml(item.name || "Unbekanntes Produkt")}</article>`)
+      .join("");
+    sections.push(`<details class="cleanup-details"><summary>Gelöschte Produkte ohne Abhängigkeiten (${removedItems.length})</summary>${itemHtml}</details>`);
+  }
+
+  if (removedUnits.length) {
+    const unitHtml = removedUnits
+      .map((unit) => `<article class="cleanup-result-row">${escapeHtml(unit.name || "Unbekannte Einheit")}</article>`)
+      .join("");
+    sections.push(`<details class="cleanup-details"><summary>Gelöschte Einheiten ohne Abhängigkeiten (${removedUnits.length})</summary>${unitHtml}</details>`);
+  }
+
+  if (removedTypes.length) {
+    const typeHtml = removedTypes
+      .map((type) => `<article class="cleanup-result-row">${escapeHtml(type.name || "Unbekannter Produkttyp")}</article>`)
+      .join("");
+    sections.push(`<details class="cleanup-details"><summary>Gelöschte Produkttypen ohne Abhängigkeiten (${removedTypes.length})</summary>${typeHtml}</details>`);
+  }
+
   exportCleanupResult.hidden = false;
-  exportCleanupList.innerHTML = removed
-    .slice()
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .map((entry) => {
-      const customer = state.customers.find((c) => c.id === entry.customerId);
-      const item = state.items.find((i) => i.id === entry.itemId);
-      const customerName = customer ? getCustomerDisplay(customer) : "Unbekannter Kunde";
-      const itemLabel = item ? item.name : "Unbekannte Leistung";
-      const unit = getItemUnitName(item);
-      const qty = Number(entry.quantity) || 0;
-      return `
-        <article class="cleanup-result-row">
-          <strong>${escapeHtml(formatDateCH(entry.date || ""))}</strong><br>
-          ${escapeHtml(customerName)}<br>
-          ${escapeHtml(itemLabel)} | ${escapeHtml(String(qty))} ${escapeHtml(unit)}
-        </article>
-      `;
-    })
-    .join("");
+  exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

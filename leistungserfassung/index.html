@@ -21,6 +21,7 @@
     <nav class="tabs tabs-main" role="tablist" aria-label="Hauptbereiche">
       <button class="tab active" data-tab="erfassung" role="tab" aria-selected="true">Erfassung</button>
       <button class="tab" data-tab="stammdaten" role="tab" aria-selected="false">Stammdaten</button>
+      <button class="tab" data-tab="auswertung" role="tab" aria-selected="false">Auswertung</button>
       <button class="tab" data-tab="wartung" role="tab" aria-selected="false">Daten</button>
       <button class="tab" data-tab="einstellungen" role="tab" aria-selected="false">Einstellungen</button>
       <button class="tab" data-tab="anleitung" role="tab" aria-selected="false">Anleitung</button>
@@ -80,13 +81,37 @@
       </section>
     </section>
 
+
+            <section id="auswertung" class="panel" role="tabpanel" hidden>
+      <nav class="tabs tabs-sub" role="tablist" aria-label="Auswertung Untermenü">
+        <button class="subtab active" data-subtab="auswertung-stunden" role="tab" aria-selected="true">Stunden</button>
+        <button class="subtab" data-subtab="auswertung-produkte" role="tab" aria-selected="false">Produkte</button>
+      </nav>
+
+      <h2>Auswertung</h2>
+      <section class="subsection">
+        <label>Monat
+          <input id="reportMonth" type="month" />
+        </label>
+      </section>
+
+      <section id="auswertung-stunden" class="subpanel active" role="tabpanel">
+        <section class="subsection">
+          <div id="reportCalendar" class="report-calendar-wrap"></div>
+        </section>
+      </section>
+
+      <section id="auswertung-produkte" class="subpanel" role="tabpanel" hidden>
+        <section class="subsection">
+          <div id="reportCalendarProducts" class="report-calendar-wrap"></div>
+        </section>
+      </section>
+    </section>
     <section id="stammdaten" class="panel" role="tabpanel" hidden>
       <nav class="tabs tabs-sub" role="tablist" aria-label="Stammdaten">
         <button class="subtab active" data-subtab="stamm-kunden" role="tab" aria-selected="true">Kunden</button>
         <button class="subtab" data-subtab="stamm-mitarbeiter" role="tab" aria-selected="false">Mitarbeiter</button>
-        <button class="subtab" data-subtab="stamm-produkte" role="tab" aria-selected="false">Produkte</button>
-        <button class="subtab" data-subtab="stamm-einheiten" role="tab" aria-selected="false">Einheiten</button>
-        <button class="subtab" data-subtab="stamm-produkttypen" role="tab" aria-selected="false">Produkttypen</button>
+        <button class="subtab" data-subtab="stamm-produkte" role="tab" aria-selected="false">Produkte</button>        <button class="subtab" data-subtab="stamm-produkttypen" role="tab" aria-selected="false">Produkttypen</button>
       </nav>
 
       <section id="stamm-kunden" class="subpanel active" role="tabpanel">
@@ -121,6 +146,18 @@
             <button id="customerSearchClear" type="button" class="secondary" aria-label="Kundensuche zurücksetzen">X</button>
           </div>
           <div id="customerList" class="list"></div>
+        </section>
+        <section class="subsection">
+          <details>
+            <summary id="deletedCustomerSummary">Gelöschte aber in der Leistungserfassung noch verwendete Kunden (0)</summary>
+            <div class="entry-list-filter-row">
+              <label class="entry-list-filter-label">Gelöschte Kunden suchen
+                <input id="deletedCustomerSearch" type="search" placeholder="Name, Firma, Ort, PLZ, Tel, Email..." autocomplete="off" />
+              </label>
+              <button id="deletedCustomerSearchClear" type="button" class="secondary" aria-label="Gelöschte Kundensuche zurücksetzen">X</button>
+            </div>
+            <div id="deletedCustomerList" class="list"></div>
+          </details>
         </section>
       </section>
 
@@ -158,6 +195,18 @@
           </div>
           <div id="employeeList" class="list"></div>
         </section>
+        <section class="subsection">
+          <details>
+            <summary id="deletedEmployeeSummary">Gelöschte aber in der Leistungserfassung noch verwendete Mitarbeiter (0)</summary>
+            <div class="entry-list-filter-row">
+              <label class="entry-list-filter-label">Gelöschte Mitarbeiter suchen
+                <input id="deletedEmployeeSearch" type="search" placeholder="Name, Ort, PLZ, Tel, Email..." autocomplete="off" />
+              </label>
+              <button id="deletedEmployeeSearchClear" type="button" class="secondary" aria-label="Gelöschte Mitarbeitersuche zurücksetzen">X</button>
+            </div>
+            <div id="deletedEmployeeList" class="list"></div>
+          </details>
+        </section>
       </section>
 
       <section id="stamm-produkte" class="subpanel" role="tabpanel" hidden>
@@ -190,32 +239,19 @@
           </div>
           <div id="itemList" class="list"></div>
         </section>
-      </section>
-
-      <section id="stamm-einheiten" class="subpanel" role="tabpanel" hidden>
-        <h2>Einheiten</h2>
         <section class="subsection">
-          <h3>Einheit erfassen</h3>
-          <form id="unitForm" class="form-grid">
-            <label>Bezeichnung<input name="name" type="text" required /></label>
-            <div class="actions">
-              <button id="unitSubmitBtn" type="submit" class="primary" disabled>Einheit speichern</button>
-              <button id="unitCancelBtn" type="button" class="secondary" hidden>Bearbeiten abbrechen</button>
+          <details>
+            <summary id="deletedItemSummary">Gelöschte aber in der Leistungserfassung noch verwendete Produkte (0)</summary>
+            <div class="entry-list-filter-row">
+              <label class="entry-list-filter-label">Gelöschte Produkte suchen
+                <input id="deletedItemSearch" type="search" placeholder="Bezeichnung, Typ, Einheit, Preis, Einstand..." autocomplete="off" />
+              </label>
+              <button id="deletedItemSearchClear" type="button" class="secondary" aria-label="Gelöschte Produktsuche zurücksetzen">X</button>
             </div>
-          </form>
-        </section>
-        <section class="subsection">
-          <h3>Meine Einheiten</h3>
-          <div class="entry-list-filter-row">
-            <label class="entry-list-filter-label">Einheit suchen
-              <input id="unitSearch" type="search" placeholder="Bezeichnung..." autocomplete="off" />
-            </label>
-            <button id="unitSearchClear" type="button" class="secondary" aria-label="Einheitensuche zurücksetzen">X</button>
-          </div>
-          <div id="unitList" class="list"></div>
+            <div id="deletedItemList" class="list"></div>
+          </details>
         </section>
       </section>
-
       <section id="stamm-produkttypen" class="subpanel" role="tabpanel" hidden>
         <h2>Produkttypen</h2>
         <section class="subsection">
@@ -237,6 +273,18 @@
             <button id="productTypeSearchClear" type="button" class="secondary" aria-label="Produkttypensuche zurücksetzen">X</button>
           </div>
           <div id="productTypeList" class="list"></div>
+        </section>
+        <section class="subsection">
+          <details>
+            <summary id="deletedProductTypeSummary">Gelöschte aber in der Leistungserfassung noch verwendete Produkttypen (0)</summary>
+            <div class="entry-list-filter-row">
+              <label class="entry-list-filter-label">Gelöschte Produkttypen suchen
+                <input id="deletedProductTypeSearch" type="search" placeholder="Bezeichnung..." autocomplete="off" />
+              </label>
+              <button id="deletedProductTypeSearchClear" type="button" class="secondary" aria-label="Gelöschte Produkttypensuche zurücksetzen">X</button>
+            </div>
+            <div id="deletedProductTypeList" class="list"></div>
+          </details>
         </section>
       </section>
     </section>
@@ -261,7 +309,7 @@
         <p>Exportiert alle mobilen Daten (Kunden, Mitarbeiter, Produkte, Erfassungen) als JSON-Datei.</p>
         <button id="exportBtn" class="primary">Exportieren</button>
         <section id="exportCleanupResult" class="cleanup-result" hidden>
-          <h3>Werden beim Export bereinigt</h3>
+          <h3>Automatische Datenbereinigung</h3>
           <div id="exportCleanupList" class="cleanup-result-list"></div>
         </section>
         <p id="exportStatus" class="status"></p>
@@ -308,22 +356,24 @@
         </div>
       </section>
     </section>
-
     <section id="anleitung" class="panel" role="tabpanel" hidden>
-      <h2>Anleitung Mobile App</h2>
+      <h2>Anleitung</h2>
       <section class="subsection guide">
         <h3>Allgemein</h3>
-        <p>Appzweck: Gratis mobile Stammdaten- und Leistungserfassung, lokal im Browser gespeichert, mit regelmässigem Export auf Google Drive oder iCloud.</p>
-        <p>Einmal monatlich werden in der Verrechnungs-Desktop-App Rechnungen mit Schweizer QR-Code generiert, Rechnungen monitoriert, Kontoauszüge importiert und Zahlungseingänge mit offenen Rechnungen abgeglichen.</p>
-        <p>Zusätzlich ist eine Stundenabrechnung pro Mitarbeiter möglich.</p>
+        <p>Mobile Stammdaten- und Leistungserfassung, lokal im Browser gespeichert, mit regelmässigem Export (z.B. auf Google Drive oder iCloud).</p>
+        <p>Einmal monatlich kann der neueste Export in der separaten Desktop App "Fakturix CH Abrechung" importiert werden. Dort können daraus Monatsrechnungen mit Einzahlungsschein generiert und deren Zahlungsstatus überwacht werden.</p>
+        <p>Zudem lassen sich Stundenauswertungen für Kunden und Mitarbeiter auf Monatsbasis generieren. Auch Auswertungen für Produkte lassen sich erstellen.</p>
       </section>
+
       <section class="subsection guide">
         <h3>So ist die App gedacht</h3>
         <ol>
-          <li>Zuerst unter <strong>Stammdaten</strong> alles einmalig erfassen: Kunden, Mitarbeiter, Produkte, Einheiten und Produkttypen.</li>
+          <li>Zuerst unter <strong>Stammdaten</strong> alles einmalig erfassen: Kunden, Mitarbeiter, Produkte und Produkttypen.</li>
           <li>Unter <strong>Einstellungen</strong> Währung und Aufbewahrungsdauer prüfen/speichern.</li>
-          <li>Danach täglich unter <strong>Erfassung</strong> pro Kunde/Mitarbeiter die Leistung mit Datum und Menge erfassen.</li>
-          <li>Monatsende: Export-Datei in der Desktop-App importieren und Rechnungen erstellen.</li>
+          <li>Danach täglich unter <strong>Erfassung</strong> die Leistungen erfassen.</li>
+          <li>Unter <strong>Auswertung</strong> sieht man die erfassten Stunden oder Produkte übersichtlich in einem Monatskalender.</li>
+          <li>Täglich die Daten exportieren und auf ein Clouddrive sichern damit nichts verloren geht.</li>
+          <li>Am Monatsende: Aktuelleste Export-Datei, welche alle Leistungen des Monats enthält in Fakturix CH Abrechung importieren und dann die Rechnungen erstellen.</li>
         </ol>
       </section>
 
@@ -332,7 +382,7 @@
         <ol>
           <li>Leistung erfassen direkt nach dem Einsatz.</li>
           <li>Kurze Kontrolle der Tagesliste.</li>
-          <li>Am Tagesende Export ausführen und Datei sichern.</li>
+          <li>Am Tagesende Export ausführen und Datei sichern (z.B. auf Google Drive oder iCloud).</li>
         </ol>
       </section>
 
@@ -342,50 +392,6 @@
         <p>Exportiere die Daten regelmässig (am besten täglich) und speichere die Datei zusätzlich in einer Cloud, z.B. Google Drive.</p>
         <p>Falls Daten verloren gehen, kann ein früherer Export über <strong>Daten &gt; Import</strong> wieder importiert werden.</p>
       </section>
-
-      <section class="subsection guide">
-        <h3>Import auf Desktop</h3>
-        <ol>
-          <li>In der Desktop-App im Tab <strong>Import</strong> die Export-Datei laden.</li>
-          <li>Nach dem Import Rechnungen für den gewünschten Monat erstellen.</li>
-          <li>Rechnungsjournal prüfen und bei Bedarf drucken/speichern.</li>
-        </ol>
-      </section>
-      <section class="subsection guide">
-        <h3>Flussdiagramm</h3>
-        <pre class="flow-diagram">
-[Stammdaten erfassen]
-Kunden | Mitarbeiter | Produkte | Einheiten | Produkttypen
-            |
-            v
-[Einstellungen prüfen]
-Währung und Aufbewahrungsdauer festlegen
-            |
-            v
-[Tägliche Leistungserfassung]
-Kunde + Mitarbeiter + Produkt + Datum + Menge
-            |
-            v
-[Regelmässig exportieren]
-JSON-Datei speichern (z.B. Google Drive oder iCloud)
-            |
-            v
-[Monatlich Desktop-Import]
-Exportdatei importieren
-            |
-            v
-[Rechnungen generieren]
-pro Kunde / Monat mit Schweizer QR-Code
-            |
-            v
-[Rechnungsmonitoring & Abgleich]
-Kontoauszüge importieren, Zahlungseingänge abgleichen
-            |
-            v
-[Mitarbeiter-Stundenabrechnung]
-Stunden auswerten und abrechnen
-        </pre>
-      </section>
     </section>
   </main>
 
@@ -393,9 +399,29 @@ Stunden auswerten und abrechnen
     Diese App ist kostenlos. Keine Garantie, keine Haftung. Verwendung auf eigenes Risiko. Alle Daten und Berechnungen immer selbst prüfen.
   </footer>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=20260320-3"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
