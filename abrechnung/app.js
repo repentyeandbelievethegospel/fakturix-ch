@@ -1725,7 +1725,7 @@ function wireInvoiceList() {
     if (action === "save") {
         const html = renderInvoiceHtml(invoice);
         setPreviewHtml(html);
-        saveInvoiceAsPdf(html, `Rechnung-${invoice.invoiceNo || "ohne-nummer"}`);
+        saveInvoiceAsPdf(html, buildInvoicePdfFileName(invoice));
         return;
     }
   });
@@ -4661,7 +4661,7 @@ function normalizeInvoiceNoToken(value) {
 }
 
 function buildInvoiceNo(customer, month) {
-  const baseName = String(customer.lastName || customer.firstName || "K");
+  const baseName = String(customer.lastName || customer.firstName || customer.company || "K");
   const customerShort = normalizeInvoiceNoToken(baseName).slice(0, 3) || "K";
   const sequence = String(state.invoices.length + 1).padStart(3, "0");
   return `${month.replace("-", "")}-${customerShort}-${sequence}`;
@@ -4851,27 +4851,65 @@ async function saveInvoiceAsPdf(invoiceHtml, suggestedTitle = "Rechnung", option
   const orientation = options?.orientation === "landscape" ? "landscape" : "portrait";
   const JsPdfClass = globalThis?.jspdf?.jsPDF;
   if (!JsPdfClass || typeof globalThis.html2canvas !== "function") {
-    billingStatus.textContent = "PDF-Library nicht verfügbar. Fallback auf Druckdialog.";
-    openPrintWindow(invoiceHtml, title, { closeAfterPrint: false, orientation });
+    billingStatus.textContent = "PDF-Library nicht verfügbar. Speichern nicht möglich.";
     return;
   }
 
-  const temp = document.createElement("div");
-  temp.style.position = "fixed";
-  temp.style.left = "-20000px";
-  temp.style.top = "0";
-  temp.style.width = orientation === "landscape" ? "1123px" : "794px";
-  temp.style.background = "#ffffff";
-  temp.innerHTML = `<article class="invoice-preview print-only-preview">${invoiceHtml}</article>`;
-  document.body.appendChild(temp);
+  const fileName = `${title}.pdf`;
+  const pickerResult = await requestPdfSaveHandle(fileName);
+  if (pickerResult.status === "unsupported") {
+    billingStatus.textContent = "Speichern-unter-Dialog wird von diesem Browser nicht unterstützt.";
+    return;
+  }
+  if (pickerResult.status === "canceled") {
+    billingStatus.textContent = "Speichern wurde abgebrochen.";
+    return;
+  }
+  if (pickerResult.status !== "ready" || !pickerResult.handle) {
+    billingStatus.textContent = "Speichern-unter-Dialog fehlgeschlagen.";
+    return;
+  }
+
+  const createRenderHost = (retryInViewport = false) => {
+    const host = document.createElement("div");
+    host.style.position = "fixed";
+    host.style.left = retryInViewport ? "0" : "-20000px";
+    host.style.top = "0";
+    host.style.width = orientation === "landscape" ? "1123px" : "794px";
+    host.style.background = "#ffffff";
+    host.style.opacity = retryInViewport ? "0" : "1";
+    host.style.pointerEvents = "none";
+    host.style.zIndex = "-1";
+    host.innerHTML = `<article class="invoice-preview print-only-preview">${invoiceHtml}</article>`;
+    document.body.appendChild(host);
+    return host;
+  };
+
+  let temp = createRenderHost(false);
 
   billingStatus.textContent = "PDF wird erstellt...";
   try {
-    const canvas = await globalThis.html2canvas(temp, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff"
-    });
+    let canvas;
+    try {
+      canvas = await globalThis.html2canvas(temp, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff"
+      });
+    } catch (firstError) {
+      console.warn("PDF Render Retry (in viewport) after first failure:", firstError);
+      temp.remove();
+      temp = createRenderHost(true);
+      canvas = await globalThis.html2canvas(temp, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff"
+      });
+    }
+
+    if (!canvas || !canvas.width || !canvas.height) {
+      throw new Error("Leere Vorlage");
+    }
 
     const pdf = new JsPdfClass({ unit: "mm", format: "a4", orientation });
     const margin = 8;
@@ -4909,12 +4947,11 @@ async function saveInvoiceAsPdf(invoiceHtml, suggestedTitle = "Rechnung", option
       firstPage = false;
       offsetY += sliceHeight;
     }
-    const fileName = `${title}.pdf`;
+
     const pdfBlob = pdf.output("blob");
-    const saveResult = await savePdfBlobWithDialog(pdfBlob, fileName);
-    if (saveResult === "unsupported" || saveResult === "error") {
-      downloadBlob(pdfBlob, fileName);
-      billingStatus.textContent = `PDF heruntergeladen: ${fileName}`;
+    const saveResult = await savePdfBlobWithDialog(pdfBlob, fileName, pickerResult.handle);
+    if (saveResult === "error") {
+      billingStatus.textContent = "Speichern-unter-Dialog fehlgeschlagen.";
     } else if (saveResult === "canceled") {
       billingStatus.textContent = "Speichern wurde abgebrochen.";
     } else {
@@ -4922,10 +4959,51 @@ async function saveInvoiceAsPdf(invoiceHtml, suggestedTitle = "Rechnung", option
     }
   } catch (error) {
     console.error(error);
-    billingStatus.textContent = "PDF-Erstellung fehlgeschlagen. Fallback auf Druckdialog.";
-    openPrintWindow(invoiceHtml, title, { closeAfterPrint: false, orientation });
+    const detail = error && error.message ? ` (${error.message})` : "";
+    billingStatus.textContent = `PDF-Erstellung fehlgeschlagen${detail}.`;
   } finally {
     temp.remove();
+  }
+}
+
+async function requestPdfSaveHandle(fileName) {
+  if (typeof window.showSaveFilePicker !== "function") return { status: "unsupported" };
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [
+        {
+          description: "PDF-Datei",
+          accept: { "application/pdf": [".pdf"] }
+        }
+      ]
+    });
+    return { status: "ready", handle };
+  } catch (error) {
+    if (error && error.name === "AbortError") return { status: "canceled" };
+    console.error(error);
+    return { status: "error" };
+  }
+}
+
+async function savePdfBlobWithDialog(blob, fileName, providedHandle = null) {
+  let handle = providedHandle;
+  if (!handle) {
+    const pickerResult = await requestPdfSaveHandle(fileName);
+    if (pickerResult.status === "unsupported") return "unsupported";
+    if (pickerResult.status === "canceled") return "canceled";
+    if (pickerResult.status !== "ready" || !pickerResult.handle) return "error";
+    handle = pickerResult.handle;
+  }
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return "saved";
+  } catch (error) {
+    if (error && error.name === "AbortError") return "canceled";
+    console.error(error);
+    return "error";
   }
 }
 
@@ -4962,6 +5040,28 @@ function buildPrintDocumentHtml(invoiceHtml, title, autoPrint, closeAfterPrint =
   `;
 }
 
+
+function sanitizeFileNamePart(value, fallback = "x") {
+  const text = String(value || "").trim();
+  const normalized = text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return normalized || fallback;
+}
+
+function buildInvoicePdfFileName(invoice) {
+  const customer = state.customers.find((c) => c.id === invoice?.customerId) || {};
+  const parts = ["Rechnung", sanitizeFileNamePart(invoice?.invoiceNo, "ohneNr")];
+  const company = sanitizeFileNamePart(customer.company, "");
+  const firstName = sanitizeFileNamePart(customer.firstName, "");
+  const lastName = sanitizeFileNamePart(customer.lastName, "");
+  if (company) parts.push(company);
+  if (firstName) parts.push(firstName);
+  if (lastName) parts.push(lastName);
+  return parts.join("_");
+}
 function sanitizeDocumentTitle(value) {
   const raw = String(value || "").trim();
   const cleaned = raw
@@ -5151,6 +5251,18 @@ function isValidIban(ibanRaw) {
   }
   return remainder === 1;
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
