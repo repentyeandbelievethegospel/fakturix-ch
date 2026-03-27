@@ -1,0 +1,545 @@
+﻿<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fakturix CH Abrechnung</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/svg+xml" href="assets/fakturix-favicon.svg" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-brand">
+      <img id="headerLogo" class="header-logo" alt="Firmenlogo" hidden />
+      <div>
+        <div class="header-title-row">
+          <img class="header-app-logo" src="assets/fakturix-logo.svg" alt="Fakturix CH Logo" />
+          <h1>Fakturix CH Abrechnung</h1>
+        </div>
+        <p>Import, Abrechnung und PDF-Rechnung</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <nav class="tabs" role="tablist" aria-label="Hauptbereiche">
+      <button class="tab active" data-tab="import" role="tab" aria-selected="true">Import</button>
+      <button class="tab" data-tab="rechnungen" role="tab" aria-selected="false">Rechnungen</button>
+      <button class="tab" data-tab="stunden" role="tab" aria-selected="false">Auswertungen</button>
+      <button class="tab" data-tab="firmendaten" role="tab" aria-selected="false">Firmendaten</button>
+      <button class="tab" data-tab="backup" role="tab" aria-selected="false">Wartung</button>
+      <button class="tab" data-tab="backup-export" role="tab" aria-selected="false">Backup</button>
+      <button class="tab" data-tab="anleitung" role="tab" aria-selected="false">Anleitung</button>
+      <button class="tab" data-tab="lizenzen" role="tab" aria-selected="false">Lizenzen</button>
+    </nav>
+
+    <section id="import" class="tab-panel active" role="tabpanel">
+      <section class="card">
+        <h2>Import</h2>
+        <nav class="tabs tabs-sub" role="tablist" aria-label="Import Untermenü">
+          <button class="subtab active" data-import-tab="import-entries-panel" role="tab" aria-selected="true">Leistungserfassung</button>
+          <button class="subtab" data-import-tab="import-camt-panel" role="tab" aria-selected="false">Kontoauszug</button>
+        </nav>
+
+        <section id="import-entries-panel" class="import-subpanel active" role="tabpanel">
+          <section class="card import-form-area">
+            <h3>Leistungserfassungen importieren</h3>
+            <label>Dateien auswählen
+              <input id="importFiles" type="file" accept=".json,application/json" multiple required />
+            </label>
+              <p class="status">Hinweis: Die Datei muss als JSON-Export aus der Fakturix CH Leistungserfassung vorliegen.</p>
+            <div style="height: 0.8rem;"></div>
+            <div class="actions">
+              <button id="importBtn" class="primary" disabled>Importieren</button>
+            </div>
+            <p id="importStatus" class="status"></p>
+          </section>
+        </section>
+
+        <div id="importSuccessDialog" class="confirm-overlay" hidden>
+          <div class="confirm-card import-success-card">
+            <div class="import-success-icon" aria-hidden="true">✔</div>
+            <h3>Import erfolgreich</h3>
+            <p id="importSuccessSummary" class="status"></p>
+            <div id="importSuccessDetails" class="cleanup-result-list"></div>
+            <div class="actions">
+              <button id="importSuccessCloseBtn" type="button" class="primary">OK</button>
+            </div>
+          </div>
+        </div>
+
+        <section id="import-camt-panel" class="import-subpanel" role="tabpanel" hidden>
+          <section class="card import-form-area">
+            <h3>Kontoauszug importieren</h3>
+            <label>Datei auswählen
+              <input id="camtImportFile" type="file" accept=".xml,text/xml,application/xml" required />
+            </label>
+              <p class="status">Hinweis: Der Kontoauszug muss im CAMT-Standard (XML) vorliegen.</p>
+            <div style="height: 0.8rem;"></div>
+            <div class="actions">
+              <button id="camtImportBtn" class="primary" disabled>Importieren</button>
+            </div>
+            <p id="camtImportStatus" class="status"></p>
+            <section id="camtImportResult" class="cleanup-result" hidden>
+              <h3>Import-Protokoll</h3>
+              <div id="camtImportResultList" class="cleanup-result-list"></div>
+            </section>
+          </section>
+        </section>
+
+        <div id="camtImportDialog" class="confirm-overlay" hidden>
+          <div class="confirm-card import-success-card">
+            <div class="import-success-icon" aria-hidden="true">✔</div>
+            <h3>Import-Protokoll</h3>
+            <div id="camtImportDialogList" class="cleanup-result-list"></div>
+            <div class="actions">
+              <button id="camtImportDialogCloseBtn" type="button" class="primary">OK</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section id="rechnungen" class="tab-panel" role="tabpanel" hidden>
+      <div class="invoice-grid">
+        <section class="card">
+          <h2>Verrechnung</h2>
+          <form id="billingForm" class="grid">
+            <label>Kunde
+              <select id="billingCustomer" required></select>
+            </label>
+            <label>Leistungsmonat
+              <input id="billingMonth" type="month" required />
+            </label>
+            <label>Einzahlungsschein
+              <select id="billingPaymentSlip" required>
+                <option value="swiss_qr" selected>Schweizer QR-Rechnung</option>
+                <option value="appendix">individuelles Beiblatt</option>
+                <option value="none">ohne</option>
+              </select>
+            </label>
+            <div class="actions">
+              <button type="submit" class="primary">Rechnungen erstellen</button>
+            </div>
+          </form>
+          <p id="billingStatus" class="status"></p>
+        </section>
+
+        <div id="billingSuccessDialog" class="confirm-overlay" hidden>
+          <div class="confirm-card import-success-card">
+            <div id="billingSuccessIcon" class="import-success-icon" aria-hidden="true">✔</div>
+            <h3 id="billingSuccessTitle">Ergebnis Rechnungslauf</h3>
+            <p id="billingSuccessSummary" class="status"></p>
+            <div id="billingSuccessDetails" class="cleanup-result-list"></div>
+            <div class="actions">
+              <button id="billingSuccessCloseBtn" type="button" class="primary">OK</button>
+            </div>
+          </div>
+        </div>
+
+        <section class="card">
+          <h2>Rechnungsjournal</h2>
+          <div class="actions invoice-filter-actions">
+            <label>Filter Monat
+              <input id="invoiceFilterMonth" type="month" />
+            </label>
+            <label>Kunde
+              <input id="invoiceFilterCustomer" type="search" list="invoiceFilterCustomerList" placeholder="Kunde suchen..." />
+              <datalist id="invoiceFilterCustomerList"></datalist>
+            </label>
+            <label>Zahlungsstatus
+              <select id="invoiceFilterStatus">
+                <option value="all" selected>Alle</option>
+                <option value="open">Offen</option>
+                <option value="due">Fällig</option>
+                <option value="paid">Bezahlt</option>
+              </select>
+            </label>
+            <label>Versandstatus
+              <select id="invoiceFilterSentStatus">
+                <option value="all" selected>Alle</option>
+                <option value="sent">Versendet</option>
+                <option value="unsent">Nicht versendet</option>
+              </select>
+            </label>
+            <button id="invoiceFilterClearBtn" type="button">Filter löschen</button>
+            <button id="invoiceDeleteAllBtn" type="button" class="danger">Alle Rechnungen löschen</button>
+          </div>
+          <div style="height: 0.8rem;"></div>
+          <div id="invoiceList" class="invoice-list"></div>
+          <div id="invoiceDeleteAllDialog" class="confirm-overlay" hidden>
+            <div class="confirm-card">
+              <h3>Betroffene Rechnungen</h3>
+              <p>Die folgenden Rechnungen werden gelöscht:</p>
+              <div id="invoiceDeleteAllList" class="cleanup-result-list"></div>
+              <label class="confirm-checkbox-row">
+                <input id="invoiceDeleteAllConfirmCheckbox" type="checkbox" />
+                <span>Ich bestätige, dass die aufgelisteten Rechnungen gelöscht werden.</span>
+              </label>
+              <div class="actions">
+                <button id="invoiceDeleteAllCancelBtn" type="button">Abbrechen</button>
+                <button id="invoiceDeleteAllContinueBtn" type="button" class="danger" disabled>Weiter</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card preview-card">
+          <h2>Rechnungsvorschau</h2>
+          <article id="invoicePreview" class="invoice-preview"></article>
+        </section>
+      </div>
+    </section>
+
+    <section id="firmendaten" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Firmendaten</h2>
+        <form id="companyForm" class="grid company-form-grid">
+          <label class="full-width" data-logo-field="true">Logo
+            <input id="companyLogoInput" type="file" accept="image/*" />
+            <span class="logo-inline-preview">
+              <img id="companyLogoPreview" alt="Logo Vorschau" hidden />
+              <small id="companyLogoPreviewText">Noch kein Logo hochgeladen.</small>
+            </span>
+          </label>
+
+          <label>Firmenname<input name="name" type="text" required /></label>
+          <label>Strasse<input name="street" type="text" required /></label>
+
+          <div class="field-row">
+            <label>PLZ<input name="zip" type="text" required /></label>
+            <label>Ort<input name="city" type="text" required /></label>
+          </div>
+
+          <label>Website<input name="website" type="text" /></label>
+          <label>Email<input name="email" type="email" required /></label>
+          <label>Telefon<input name="mobile" type="text" required /></label>
+          <label>IBAN<input name="iban" type="text" placeholder="CH00 0000 0000 0000 0000 0" required /></label>
+          <label>Währung (ISO-Code)<input name="currency" type="text" value="CHF" maxlength="3" required /></label>
+          <label>MwSt Nr<input name="vatNo" type="text" /></label>
+          <label>MwSt Satz %<input name="vatRate" type="number" step="0.01" min="0" value="8.1" /></label>
+          <label>Zahlungsfrist (Tage)<input name="paymentTermDays" type="number" min="0" step="1" value="30" required /></label>
+
+          <label class="full-width">Rechnungstext
+            <textarea name="invoiceText" rows="4" placeholder="Vielen Dank für Ihren Auftrag." required></textarea>
+          </label>
+
+          
+          <label class="full-width">Text für individuelles Beiblatt
+            <textarea name="appendixText" rows="4" placeholder="Zusätzliche Informationen für das individuelle Beiblatt."></textarea>
+          </label>
+
+          <button type="submit" class="primary company-save-btn">Firmendaten speichern</button>
+        </form>
+        <p id="companyStatus" class="status"></p>
+      </section>
+    </section>
+
+    <section id="stunden" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Auswertungen</h2>
+        <form class="actions hours-filter" onsubmit="return false;">
+          <label>Leistungsmonat
+            <input id="hoursMonth" type="month" />
+          </label>
+        </form>
+        <div id="hoursSummary" class="hours-summary"></div>
+
+        <nav class="tabs tabs-sub" role="tablist" aria-label="Auswertungen Untermenü">
+          <button class="subtab active" data-hours-tab="mitarbeiter" role="tab" aria-selected="true">Stunden Mitarbeiter</button>
+          <button class="subtab" data-hours-tab="kunden" role="tab" aria-selected="false">Stunden Kunden</button>
+          <button class="subtab" data-hours-tab="tage" role="tab" aria-selected="false">Stunden Kalenderübersicht</button>
+          <button class="subtab" data-hours-tab="stunden-gewinn" role="tab" aria-selected="false">Stunden Gewinn</button>
+          <button class="subtab" data-hours-tab="produkte-mitarbeiter" role="tab" aria-selected="false">Produkte Mitarbeiter</button>
+          <button class="subtab" data-hours-tab="produkte-kunden" role="tab" aria-selected="false">Produkte Kunden</button>
+          <button class="subtab" data-hours-tab="produkte-tage" role="tab" aria-selected="false">Produkte Kalenderübersicht</button>
+          <button class="subtab" data-hours-tab="produkte-gewinn" role="tab" aria-selected="false">Produkte Gewinn</button>
+          <button class="subtab" data-hours-tab="mehrwertsteuer" role="tab" aria-selected="false">Mehrwertsteuer</button>
+        </nav>
+
+        <section id="hours-customer-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByCustomer" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-employee-panel" class="hours-subpanel active" role="tabpanel">
+          <div id="hoursByEmployee" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-products-employee-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByProductsEmployee" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-products-customer-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByProductsCustomer" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-days-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByDays" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-profit-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByProfit" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-product-days-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByProductDays" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-vat-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByVat" class="hours-table-wrap"></div>
+        </section>
+        <section id="hours-products-profit-panel" class="hours-subpanel" role="tabpanel" hidden>
+          <div id="hoursByProductsProfit" class="hours-table-wrap"></div>
+        </section>
+      </section>
+    </section>
+
+    <section id="backup" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Wartung</h2>
+
+        <section class="maintenance-group">
+          <h3>Backup erstellen</h3>
+          <p>Sämtliche erfassten Daten und Einstellungen sichern.</p>
+          <div class="actions">
+            <button id="backupExportBtn" class="primary" type="button">Backup exportieren</button>
+          </div>
+        </section>
+
+        <section class="maintenance-group">
+          <h3>Restore</h3>
+          <label>Backup-Datei auswählen
+            <input id="backupImportFile" type="file" accept=".json,application/json" required />
+          </label>
+          <div class="actions">
+            <button id="backupImportBtn" class="primary" type="button" disabled>Backup importieren</button>
+          </div>
+        </section>
+
+        <section class="maintenance-group">
+          <h3>Datenbereinigung</h3>
+          <label>Erfassungen/Rechnungen älter als
+            <select id="invoiceCleanupMonths" required>
+              <option value="1">1 Monat</option>
+              <option value="2">2 Monate</option>
+              <option value="3">3 Monate</option>
+              <option value="4">4 Monate</option>
+              <option value="5">5 Monate</option>
+              <option value="6">6 Monate</option>
+              <option value="7">7 Monate</option>
+              <option value="8">8 Monate</option>
+              <option value="9">9 Monate</option>
+              <option value="10">10 Monate</option>
+              <option value="11">11 Monate</option>
+              <option value="12" selected>12 Monate</option>
+              <option value="13">13 Monate</option>
+              <option value="14">14 Monate</option>
+              <option value="15">15 Monate</option>
+              <option value="16">16 Monate</option>
+              <option value="17">17 Monate</option>
+              <option value="18">18 Monate</option>
+              <option value="19">19 Monate</option>
+              <option value="20">20 Monate</option>
+              <option value="21">21 Monate</option>
+              <option value="22">22 Monate</option>
+              <option value="23">23 Monate</option>
+              <option value="24">24 Monate</option>
+            </select>
+          </label>
+          <label class="reset-confirm-label">
+            <input id="invoiceCleanupConfirmCheckbox" type="checkbox" required />
+            Ich bestätige, dass die markierten Erfassungen/Rechnungen älter als <strong id="invoiceCleanupConfirmValue">12 Monate</strong> gelöscht werden.
+          </label>
+          <div class="actions">
+            <button id="invoiceCleanupBtn" type="button" class="danger" disabled onclick="window.__handleInvoiceCleanupClick && window.__handleInvoiceCleanupClick()">Alte Erfassungen/Rechnungen löschen</button>
+          </div>
+        </section>
+
+        <section class="maintenance-group">
+          <h3>Applikation zurücksetzen</h3>
+          <label class="reset-confirm-label">
+            <input id="resetConfirmCheckbox" type="checkbox" required />
+            Ich bestätige, dass alle Daten endgültig gelöscht werden.
+          </label>
+          <div class="actions">
+            <button id="resetDataBtn" class="danger" type="button" disabled>Alle Daten löschen</button>
+          </div>
+        </section>
+
+        <p id="backupStatus" class="status"></p>
+
+        <section id="cleanupResult" class="cleanup-result" hidden>
+          <h3>Gelöschte Daten</h3>
+          <div id="cleanupResultList" class="cleanup-result-list"></div>
+        </section>
+      </section>
+    </section>
+
+    <section id="backup-export" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Backup</h2>
+        <p>Erstellt ein vollständiges Backup und zeigt den generierten Dateinamen an.</p>
+        <div class="actions">
+          <button id="backupNowBtn" class="primary" type="button">Backup exportieren</button>
+        </div>
+        <p id="backupNowStatus" class="status"></p>
+      </section>
+    </section>
+
+<div id="maintenanceActionDialog" class="confirm-overlay" hidden>
+      <div class="confirm-card import-success-card">
+        <div id="maintenanceActionIcon" class="import-success-icon" aria-hidden="true">✔</div>
+        <h3 id="maintenanceActionTitle">Wartung</h3>
+        <p id="maintenanceActionSummary" class="status"></p>
+        <div id="maintenanceActionDetails" class="cleanup-result-list"></div>
+        <div class="actions">
+          <button id="maintenanceActionCloseBtn" type="button" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <section id="anleitung" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Anleitung Fakturix CH Abrechnung</h2>
+        <p>Diese App ist für die monatliche Abrechnung auf Basis der Fakturix CH Leistungserfassung erfassten Leistungen gedacht.</p>
+
+        <h3>Import</h3>
+        <p>Im Tab Import den Export aus der Fakturix CH Leistungserfassung auswählen und importieren.</p>
+        <p>Optional Kontoauszug (CAMT XML) importieren, damit Zahlungen automatisch abgeglichen werden.</p>
+
+        <h3>Firmendaten pflegen</h3>
+        <p>Absenderdaten, IBAN, Zahlungsfrist, MwSt Nr, Mwst Satz, Rechnungstext usw. erfassen.</p>
+        <p>Logo hochladen (wird in Rechnungen und Auswertungen verwendet).</p>
+
+        <h3>Rechnungen erstellen</h3>
+        <p>Im Tab Rechnungen Kunde (oder alle Kunden) und Monat wählen.</p>
+        <p>Rechnungen erstellen klicken und Vorschau prüfen.</p>
+        <p>Im Journal pro Rechnung drucken oder als PDF speichern.</p>
+
+        <h3>Rechnungskontrolle</h3>
+        <p>Rechnungsjournal für Versandstatus, Zahlungsstatus und Fälligkeit nutzen.</p>
+
+        <h3>Auswertungen</h3>
+        <p>Diverse Auswertungen Stunden, Umsätze, Löhne prüfen.</p>
+
+        <h3>Wartung und Backup</h3>
+        <p>Wichtig: Alle Daten werden im Local Storage des Browsers gespeichert und können bei Browser-Reset, App-/Browser-Update oder Gerätewechsel verloren gehen.</p>
+        <p>Deshalb immer nach der Rechnungserstellung oder nach dem Zahlungsabgleich ein Backup exportieren.</p>
+        <p>So können auch ältere Daten per Datenbereinigung entfernt werden (z.B. jährlich), und bei Bedarf später wieder per Backup-Import eingespielt werden.</p>
+        <p>Bei zu grosser Datenmenge &gt;1000 Rechnungen kann es zu Performance Problemen kommen - auch hier hilft die Datenbereinigung.</p>
+      </section>
+    </section>
+    <section id="lizenzen" class="tab-panel" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Open-Source-Lizenzen</h2>
+        <p>Diese Anwendung verwendet Open-Source-Software. Wir danken den jeweiligen Entwicklerinnen und Entwicklern für ihre Arbeit.</p>
+        <p>Die folgenden Bibliotheken werden in dieser App verwendet:</p>
+
+        <h3>html2canvas</h3>
+        <p><a href="https://html2canvas.hertzen.com/" target="_blank" rel="noopener noreferrer">https://html2canvas.hertzen.com/</a></p>
+        <p>Lizenz: MIT License<br>Copyright (c) Niklas von Hertzen</p>
+
+        <h3>jsPDF</h3>
+        <p><a href="https://github.com/parallax/jsPDF" target="_blank" rel="noopener noreferrer">https://github.com/parallax/jsPDF</a></p>
+        <p>Lizenz: MIT License<br>Copyright (c) James Hall</p>
+
+        <h3>SwissQRBill</h3>
+        <p><a href="https://github.com/schoero/SwissQRBill" target="_blank" rel="noopener noreferrer">https://github.com/schoero/SwissQRBill</a></p>
+        <p>Lizenz: MIT License<br>Copyright (c) Roger Schönbächler</p>
+
+        <p>Die vollständigen Lizenztexte der verwendeten Open-Source-Bibliotheken sind im Ordner „licenses“ dieser Anwendung enthalten.</p>
+      </section>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    Diese App ist kostenlos. Keine Garantie, keine Haftung. Verwendung auf eigenes Risiko. Alle Daten und Berechnungen immer selbst prüfen.
+  </footer>
+
+  <script src="vendor/swissqrbill.bundle.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="vendor/html2canvas.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
