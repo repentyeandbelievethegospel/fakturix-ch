@@ -813,3 +813,18 @@ button:disabled {
 
 
 
+
+/* Auswertung Smartphone Hochformat: horizontales Scrollen statt Spaltenüberlagerung */
+@media (max-width: 640px) {
+  .hours-day-content {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hours-day-content .hours-calendar-cell-columns,
+  .hours-day-content .hours-calendar-list,
+  .hours-day-content .hours-calendar-total {
+    min-width: 480px;
+  }
+}

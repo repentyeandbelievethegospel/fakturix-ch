@@ -185,7 +185,7 @@ function normalizeStateData(parsed) {
     { id: "unit-h", name: "h" },
     { id: "unit-stk", name: "Stk" }
   ];
-  const productTypes = normalizeNamedCatalog(Array.isArray(parsed?.productTypes) ? parsed.productTypes : [], "Produkttyp");  ensureCatalogContains(productTypes, "Dienstleistung");
+  const productTypes = normalizeNamedCatalog(Array.isArray(parsed?.productTypes) ? parsed.productTypes : [], "");  ensureCatalogContains(productTypes, "Dienstleistung");
   ensureCatalogContains(productTypes, "Produkt");
 
   const items = (Array.isArray(parsed?.items) ? parsed.items : []).map((item) => {
@@ -1508,7 +1508,7 @@ function normalizeImport(parsed) {
     { id: "unit-h", name: "h" },
     { id: "unit-stk", name: "Stk" }
   ];
-  const productTypes = normalizeNamedCatalog(importedProductTypes, "Produkttyp");  ensureCatalogContains(productTypes, "Dienstleistung");
+  const productTypes = normalizeNamedCatalog(importedProductTypes, "");  ensureCatalogContains(productTypes, "Dienstleistung");
   ensureCatalogContains(productTypes, "Produkt");
 
   const items = importedItems.map((i) => {
@@ -2906,7 +2906,7 @@ function normalizeCurrency(value) {
 function normalizeMonths(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 12;
-  return Math.min(12, Math.max(1, Math.round(n)));
+  return Math.min(24, Math.max(1, Math.round(n)));
 }
 
 function pruneOldEntriesForExport() {
@@ -3069,6 +3069,8 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
 
 
 
