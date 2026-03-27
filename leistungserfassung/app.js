@@ -1435,12 +1435,10 @@ function resetItemForm() {
   editingItemId = null;
   itemForm.reset();
   if (itemTypeSelect) {
-    const defaultType = findOrCreateCatalogByName(state.productTypes, "Dienstleistung");
-    itemTypeSelect.value = defaultType?.id || "";
+    itemTypeSelect.value = "";
   }
   if (itemUnitSelect) {
-    const defaultUnit = findOrCreateCatalogByName(state.units, "h");
-    itemUnitSelect.value = defaultUnit?.id || "";
+    itemUnitSelect.value = "";
   }
   itemSubmitBtn.textContent = "Eintrag speichern";
   itemCancelBtn.hidden = true;
@@ -1627,7 +1625,18 @@ function wireRequiredFieldStates() {
     field.addEventListener("blur", refresh);
     refresh();
   });
-  const optionalFields = document.querySelectorAll("form input[data-optional-indicator], form select[data-optional-indicator], form textarea[data-optional-indicator]");
+  const customerCompanyField = customerForm?.company;
+  if (customerCompanyField) {
+    const refreshCustomerNameRequirement = () => {
+      syncCustomerNameRequirement();
+      syncEntrySubmitButtonState();
+    };
+    customerCompanyField.addEventListener("input", refreshCustomerNameRequirement);
+    customerCompanyField.addEventListener("change", refreshCustomerNameRequirement);
+    customerCompanyField.addEventListener("blur", refreshCustomerNameRequirement);
+    refreshCustomerNameRequirement();
+  }
+  const optionalFields = document.querySelectorAll("form input:not([required]):not([type='hidden']), form select:not([required]), form textarea:not([required])");
   optionalFields.forEach((field) => {
     const refresh = () => updateOptionalFieldState(field);
     field.addEventListener("input", refresh);
@@ -1640,7 +1649,8 @@ function wireRequiredFieldStates() {
 function refreshRequiredFieldStates() {
   const requiredFields = document.querySelectorAll("form input[required], form select[required], form textarea[required]");
   requiredFields.forEach((field) => updateRequiredFieldState(field));
-  const optionalFields = document.querySelectorAll("form input[data-optional-indicator], form select[data-optional-indicator], form textarea[data-optional-indicator]");
+  syncCustomerNameRequirement();
+  const optionalFields = document.querySelectorAll("form input:not([required]):not([type='hidden']), form select:not([required]), form textarea:not([required])");
   optionalFields.forEach((field) => updateOptionalFieldState(field));
   updateEntrySelectionDisplayStates();
   syncEntrySubmitButtonState();
@@ -1648,6 +1658,18 @@ function refreshRequiredFieldStates() {
 
 function updateRequiredFieldState(field) {
   const rawValue = String(field?.value ?? "").trim();
+  const isRequired = Boolean(field?.required);
+  if (!isRequired) {
+    const isValidOptional = rawValue.length === 0 ? true : field.checkValidity();
+    field.classList.toggle("required-empty", !isValidOptional);
+    field.classList.toggle("required-filled", isValidOptional);
+    const optionalLabel = field.closest("label");
+    if (!optionalLabel) return;
+    optionalLabel.classList.add("required-indicator");
+    optionalLabel.classList.toggle("required-empty", !isValidOptional);
+    optionalLabel.classList.toggle("required-filled", isValidOptional);
+    return;
+  }
   const hasValue = rawValue.length > 0;
   let isValid = hasValue && field.checkValidity();
   const linkedId = field.dataset?.requiredLinkedId;
@@ -1709,6 +1731,22 @@ function syncEntrySubmitButtonState() {
   if (itemSubmitBtn) itemSubmitBtn.disabled = !isFormReadyForSubmit(itemForm);
   if (unitSubmitBtn) unitSubmitBtn.disabled = !isFormReadyForSubmit(unitForm);
   if (productTypeSubmitBtn) productTypeSubmitBtn.disabled = !isFormReadyForSubmit(productTypeForm);
+}
+
+function syncCustomerNameRequirement() {
+  if (!customerForm) return;
+  const companyValue = String(customerForm.company?.value ?? "").trim();
+  const requirePersonName = companyValue.length === 0;
+  const firstNameField = customerForm.firstName;
+  const lastNameField = customerForm.lastName;
+  if (firstNameField) {
+    firstNameField.required = requirePersonName;
+    updateRequiredFieldState(firstNameField);
+  }
+  if (lastNameField) {
+    lastNameField.required = requirePersonName;
+    updateRequiredFieldState(lastNameField);
+  }
 }
 
 function setDisplayFieldState(field, isValid) {
@@ -1991,25 +2029,27 @@ function renderItemTypeUnitSelects() {
 
   if (itemTypeSelect) {
     const previousTypeId = itemTypeSelect.value;
-    itemTypeSelect.innerHTML = activeTypes
-      .map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.name)}</option>`)
-      .join("");
+    itemTypeSelect.innerHTML = [
+      '<option value="">Bitte Typ wählen</option>',
+      ...activeTypes.map((type) => `<option value="${escapeHtml(type.id)}">${escapeHtml(type.name)}</option>`)
+    ].join("");
     if (activeTypes.some((type) => type.id === previousTypeId)) {
       itemTypeSelect.value = previousTypeId;
     } else {
-      itemTypeSelect.value = findOrCreateCatalogByName(state.productTypes, "Dienstleistung").id;
+      itemTypeSelect.value = "";
     }
   }
 
   if (itemUnitSelect) {
     const previousUnitId = itemUnitSelect.value;
-    itemUnitSelect.innerHTML = activeUnits
-      .map((unit) => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`)
-      .join("");
+    itemUnitSelect.innerHTML = [
+      '<option value="">Bitte Einheit wählen</option>',
+      ...activeUnits.map((unit) => `<option value="${escapeHtml(unit.id)}">${escapeHtml(unit.name)}</option>`)
+    ].join("");
     if (activeUnits.some((unit) => unit.id === previousUnitId)) {
       itemUnitSelect.value = previousUnitId;
     } else {
-      itemUnitSelect.value = findOrCreateCatalogByName(state.units, "h").id;
+      itemUnitSelect.value = "";
     }
   }
 }
@@ -3069,6 +3109,11 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
+
+
 
 
 
