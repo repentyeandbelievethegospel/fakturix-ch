@@ -185,7 +185,8 @@ function baseState() {
       vatRate: 8.1,
       paymentTermDays: 30,
       invoiceText: "Vielen Dank für Ihren Auftrag.",
-      appendixText: ""
+      appendixText: "",
+      showSaveButtons: true
     },
     customers: [],
     employees: [],
@@ -1217,7 +1218,7 @@ function renderInvoiceList() {
               <div class="primary-actions">
                 <button type="button" data-action="view" data-id="${escapeHtml(inv.id)}">Vorschau</button>
                 <button type="button" data-action="print" data-id="${escapeHtml(inv.id)}">Drucken</button>
-                <button type="button" data-action="save" data-id="${escapeHtml(inv.id)}">Speichern</button>
+                ${shouldShowSaveButtons() ? `<button type="button" data-action="save" data-id="${escapeHtml(inv.id)}">Speichern</button>` : ""}
                 <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(inv.id)}">Löschen</button>
               </div>
               <div class="status-action-pair">
@@ -1327,6 +1328,7 @@ function wireCompany() {
     state.company.paymentTermDays = Math.max(0, Math.round(toNumber(data.paymentTermDays, 30)));
     state.company.invoiceText = String(data.invoiceText || "").trim();
     state.company.appendixText = String(data.appendixText || "").trim();
+    state.company.showSaveButtons = Boolean(companyForm.showSaveButtons?.checked);
 
     saveState();
     companyStatus.textContent = "Firmendaten gespeichert.";
@@ -1657,7 +1659,7 @@ function wireInvoiceList() {
     if (action === "view") {
       const html = renderInvoiceHtml(invoice);
       setPreviewHtml(html);
-      openPrintWindow(html, `Rechnung-${invoice.invoiceNo || "ohne-nummer"}`, { autoPrint: false, closeAfterPrint: false });
+      openPrintWindow(html, buildInvoicePdfFileName(invoice), { autoPrint: false, closeAfterPrint: false });
       billingStatus.textContent = `Vorschau in neuem Tab geöffnet (${invoice.invoiceNo}).`;
       return;
     }
@@ -1718,7 +1720,7 @@ function wireInvoiceList() {
     if (action === "print") {
         const html = renderInvoiceHtml(invoice);
         setPreviewHtml(html);
-        openPrintWindow(html, `Rechnung-${invoice.invoiceNo || "ohne-nummer"}`);
+        openPrintWindow(html, buildInvoicePdfFileName(invoice));
         return;
     }
 
@@ -2131,6 +2133,7 @@ function renderCompanyForm() {
   companyForm.paymentTermDays.value = String(state.company.paymentTermDays ?? 30);
   companyForm.invoiceText.value = state.company.invoiceText || "";
   if (companyForm.appendixText) companyForm.appendixText.value = state.company.appendixText || "";
+  if (companyForm.showSaveButtons) companyForm.showSaveButtons.checked = state.company.showSaveButtons !== false;
   setCompanyLogoPreview(String(state.company.logoDataUrl || "").trim(), state.company.logoDataUrl ? "Gespeichertes Logo." : "Noch kein Logo hochgeladen.");
   refreshCompanyValidationStates();
 }
@@ -2269,15 +2272,15 @@ function renderHoursReport() {
       <strong>${formatCurrency(monthTotalAmount)}</strong>
     </article>
     <article class="hours-kpi">
-      <small>MwSt-Satz</small>
+      <small>MWST-Satz</small>
       <strong>${formatNumberCH(vatRate)}%</strong>
     </article>
     <article class="hours-kpi">
-      <small>MwSt-Betrag (alle)</small>
+      <small>MWST-Betrag (alle)</small>
       <strong>${formatCurrency(monthVatAmount)}</strong>
     </article>
     <article class="hours-kpi">
-      <small>Umsatz inkl. MwSt</small>
+      <small>Umsatz inkl. MWST</small>
       <strong>${formatCurrency(monthTotalInclVat)}</strong>
     </article>
     <article class="hours-kpi">
@@ -2381,11 +2384,15 @@ function renderHoursReport() {
 }
 
 
+function shouldShowSaveButtons() {
+  return state.company?.showSaveButtons !== false;
+}
+
 function renderReportActions(previewAction, saveAction, csvAction) {
   return `
     <div class="hours-actions">
       <button type="button" data-action="${escapeHtml(previewAction)}">Drucken</button>
-      <button type="button" data-action="${escapeHtml(saveAction)}">Speichern</button>
+      ${shouldShowSaveButtons() ? `<button type="button" data-action="${escapeHtml(saveAction)}">Speichern</button>` : ""}
       <button type="button" data-action="${escapeHtml(csvAction)}">CSV (Excel)</button>
     </div>
   `;
@@ -2431,8 +2438,8 @@ function renderVatBreakdown(entries, vatRate) {
         <tr>
           <th>Kunde</th>
           <th class="num">Netto</th>
-          <th class="num">MwSt-Satz</th>
-          <th class="num">MwSt-Betrag</th>
+          <th class="num">MWST-Satz</th>
+          <th class="num">MWST-Betrag</th>
           <th class="num">Brutto</th>
         </tr>
       </thead>
@@ -2767,7 +2774,7 @@ function renderProductsSummaryTable(entries, searchTerm = "") {
     <h3>Nach Produkt (Einheit Stk)</h3>
     <div class="hours-actions">
       <button type="button" data-action="preview-product-report-pdf">Drucken</button>
-      <button type="button" data-action="save-product-report-pdf">Speichern</button>
+      ${shouldShowSaveButtons() ? `<button type="button" data-action="save-product-report-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-product-report-csv">CSV (Excel)</button>
     </div>
     <label>Produkt suchen
@@ -2849,7 +2856,7 @@ function renderProductReportHtml(month, entries) {
       <p><strong>Monat:</strong> ${escapeHtml(formatMonthCH(month))}</p>
       <p><strong>Währung:</strong> ${escapeHtml(normalizeCurrencyCode(company.currency))}</p>
       <p><strong>Total Stück:</strong> ${formatNumberCH(totalQty)} | <strong>Total Betrag:</strong> ${formatCurrency(totalAmount)} | <strong>Total Gewinn:</strong> ${formatCurrency(totalProfit)}</p>
-      <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+      <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
       ${sectionsHtml || "<small>Keine Produktpositionen vorhanden.</small>"}
     </section>
   `;
@@ -3011,7 +3018,7 @@ function renderProductsByEmployeeTable(entries, searchTerm = "") {
     <h3>Produkte nach Mitarbeiter (Stk)</h3>
     <div class="hours-actions">
       <button type="button" data-action="preview-product-employee-report-pdf">Drucken</button>
-      <button type="button" data-action="save-product-employee-report-pdf">Speichern</button>
+      ${shouldShowSaveButtons() ? `<button type="button" data-action="save-product-employee-report-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-product-employee-report-csv">CSV (Excel)</button>
     </div>
     <label>Mitarbeiter suchen
@@ -3082,7 +3089,7 @@ function renderProductsByCustomerTable(entries, searchTerm = "") {
     <h3>Produkte nach Kunden (Stk)</h3>
     <div class="hours-actions">
       <button type="button" data-action="preview-product-customer-report-pdf">Drucken</button>
-      <button type="button" data-action="save-product-customer-report-pdf">Speichern</button>
+      ${shouldShowSaveButtons() ? `<button type="button" data-action="save-product-customer-report-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-product-customer-report-csv">CSV (Excel)</button>
     </div>
     <label>Kunde suchen
@@ -3296,7 +3303,7 @@ function renderProductEmployeeReportHtml(month, entries) {
         <tbody>${body || `<tr><td colspan="5"><small>Keine Daten vorhanden.</small></td></tr>`}</tbody>
       </table>
       <p><strong>Total Stück:</strong> ${formatNumberCH(totalQty)} | <strong>Total Betrag:</strong> ${formatCurrency(totalAmount)} | <strong>Total Gewinn:</strong> ${formatCurrency(totalProfit)}</p>
-      <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+      <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
     </section>
   `;
 }
@@ -3331,7 +3338,7 @@ function renderProductCustomerReportHtml(month, entries) {
         <tbody>${body || `<tr><td colspan="5"><small>Keine Daten vorhanden.</small></td></tr>`}</tbody>
       </table>
       <p><strong>Total Stück:</strong> ${formatNumberCH(totalQty)} | <strong>Total Betrag:</strong> ${formatCurrency(totalAmount)} | <strong>Total Gewinn:</strong> ${formatCurrency(totalProfit)}</p>
-      <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+      <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
     </section>
   `;
 }
@@ -3451,7 +3458,7 @@ function renderHoursProfitReportHtml(month, entries) {
       </div>
       <hr>
       ${renderHoursProfitDetails(entries)}
-      <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+      <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
     </section>
   `;
 }
@@ -3469,7 +3476,7 @@ function renderProductsProfitReportHtml(month, entries) {
       </div>
       <hr>
       ${renderProductsProfitDetails(entries)}
-      <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+      <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
     </section>
   `;
 }
@@ -3547,7 +3554,7 @@ function buildVatCsv(month, entries, vatRate) {
   const rows = buildVatRows(entries, vatRate);
   const lines = [];
   lines.push(["Monat", "\u200E" + formatMonthLongCH(month)].map(csvEscape).join(";"));
-  lines.push(["Kunde", "Netto", "MwSt-Satz", "MwSt-Betrag", "Brutto"].map(csvEscape).join(";"));
+  lines.push(["Kunde", "Netto", "MWST-Satz", "MWST-Betrag", "Brutto"].map(csvEscape).join(";"));
   rows.forEach((row) => lines.push([
     row.customerName,
     formatAmountCH(row.net),
@@ -3655,7 +3662,7 @@ function renderCustomerSummaryWithDetails(entries, searchTerm = "") {
           <td class="num hours-action-cell">
             <div class="hours-actions">
               <button type="button" data-action="print-customer" data-id="${escapeHtml(row.customerId || "__unknown_customer__")}">Drucken</button>
-              <button type="button" data-action="save-customer" data-id="${escapeHtml(row.customerId || "__unknown_customer__")}">Speichern</button>
+              ${shouldShowSaveButtons() ? `<button type="button" data-action="save-customer" data-id="${escapeHtml(row.customerId || "__unknown_customer__")}">Speichern</button>` : ""}
             </div>
           </td>
         </tr>
@@ -3704,7 +3711,7 @@ function renderCustomerSummaryWithDetails(entries, searchTerm = "") {
     <h3>Nach Kunde</h3>
     <div class="hours-actions">
       <button type="button" data-action="preview-customer-hours-pdf">Drucken</button>
-      <button type="button" data-action="save-customer-hours-pdf">Speichern</button>
+      ${shouldShowSaveButtons() ? `<button type="button" data-action="save-customer-hours-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-customer-hours-csv">CSV (Excel)</button>
     </div>
     <label>Kunde suchen
@@ -3835,7 +3842,7 @@ function renderCustomerHoursReportHtml(month, entries) {
       <p><strong>Monat:</strong> ${escapeHtml(formatMonthCH(month))}</p>
       <p><strong>Währung:</strong> ${escapeHtml(normalizeCurrencyCode(company.currency))}</p>
       <p><strong>Total Stunden:</strong> ${formatNumberCH(totalHours)} | <strong>Total Betrag:</strong> ${formatCurrency(totalAmount)}</p>
-        <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+        <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
       ${sectionsHtml || "<small>Keine Stundenpositionen vorhanden.</small>"}
     </section>
   `;
@@ -3911,7 +3918,7 @@ function renderEmployeeSummaryTable(entries, searchTerm = "") {
           <td class="num hours-action-cell">
             <div class="hours-actions">
               <button type="button" data-action="print-employee" data-id="${escapeHtml(row.employeeId || "__unassigned__")}">Drucken</button>
-              <button type="button" data-action="save-employee" data-id="${escapeHtml(row.employeeId || "__unassigned__")}">Speichern</button>
+              ${shouldShowSaveButtons() ? `<button type="button" data-action="save-employee" data-id="${escapeHtml(row.employeeId || "__unassigned__")}">Speichern</button>` : ""}
             </div>
           </td>
         </tr>
@@ -3923,7 +3930,7 @@ function renderEmployeeSummaryTable(entries, searchTerm = "") {
     <h3>Nach Mitarbeiter</h3>
     <div class="hours-actions">
       <button type="button" data-action="preview-employee-hours-pdf">Drucken</button>
-      <button type="button" data-action="save-employee-hours-pdf">Speichern</button>
+      ${shouldShowSaveButtons() ? `<button type="button" data-action="save-employee-hours-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-employee-hours-csv">CSV (Excel)</button>
     </div>
     <label>Mitarbeiter suchen
@@ -4121,7 +4128,7 @@ function renderEmployeeHoursReportHtml(month, entries) {
       <p><strong>Monat:</strong> ${escapeHtml(formatMonthCH(month))}</p>
       <p><strong>Währung:</strong> ${escapeHtml(normalizeCurrencyCode(company.currency))}</p>
       <p><strong>Total Stunden:</strong> ${formatNumberCH(totalHours)} | <strong>Total Lohn:</strong> ${formatCurrency(totalWage)}</p>
-        <p><small>Hinweis: Alle Beträge ohne MwSt.</small></p>
+        <p><small>Hinweis: Alle Beträge ohne MWST.</small></p>
       ${sectionsHtml || "<small>Keine Stundenpositionen vorhanden.</small>"}
     </section>
   `;
@@ -4214,6 +4221,7 @@ function renderEmployeeSettlementHtml(employeeId, month, entries) {
             ${escapeHtml(company.street || "")}<br>
             ${escapeHtml(company.zip || "")} ${escapeHtml(company.city || "")}<br>
             ${escapeHtml(company.email || "")}
+            ${(company.mobile || company.phone) ? `<br>${escapeHtml(company.mobile || company.phone)}` : ""}
           </p>
         </div>
       </div>
@@ -4482,6 +4490,7 @@ function renderInvoiceHtml(invoice) {
   const createdAt = invoice.createdAt || new Date().toISOString().slice(0, 10);
   const paymentSlipType = normalizePaymentSlipType(invoice.paymentSlipType);
   const currencyCode = normalizeCurrencyCode(company.currency);
+  const vatDisplayNo = String(company.vatNo || "").trim();
 
   const rowsHtml = (invoice.rows || [])
     .map(
@@ -4530,8 +4539,10 @@ function renderInvoiceHtml(invoice) {
             <strong>${escapeHtml(company.name || "")}</strong><br>
             ${escapeHtml(company.street || "")}<br>
             ${escapeHtml(company.zip || "")} ${escapeHtml(company.city || "")}<br>
-            ${escapeHtml(company.email || "")}
-            ${company.vatNo ? `<br>MwSt-Nr: ${escapeHtml(company.vatNo)}` : ""}
+            ${(company.mobile || company.phone) ? `<br><span style="display:inline-block;width:1.35em;text-align:center;">&#9742;</span> ${escapeHtml(company.mobile || company.phone)}` : ""}
+            ${company.email ? `<br><span style="display:inline-block;width:1.35em;text-align:center;">&#9993;</span> ${escapeHtml(company.email)}` : ""}
+            ${company.website ? `<br><span style="display:inline-block;width:1.35em;text-align:center;">&#127760;</span> ${escapeHtml(company.website)}` : ""}
+            ${vatDisplayNo ? `<br><span style="display:inline-block;width:1.35em;text-align:center;">&#129534;</span> ${escapeHtml(vatDisplayNo)}` : ""}
           </p>
         </div>
       </div>
@@ -4578,7 +4589,7 @@ function renderInvoiceHtml(invoice) {
 
       <div class="totals">
         <p><span>Zwischentotal</span><span>${formatCurrency(invoice.subtotal)}</span></p>
-        <p><span>MwSt ${toNumber(invoice.vatRate, 0).toFixed(2)}%</span><span>${formatCurrency(invoice.vatAmount)}</span></p>
+        <p><span>MWST ${toNumber(invoice.vatRate, 0).toFixed(2)}%</span><span>${formatCurrency(invoice.vatAmount)}</span></p>
         <p class="grand"><span>Total</span><span>${formatCurrency(invoice.grandTotal)}</span></p>
       </div>
 
@@ -5251,6 +5262,19 @@ function isValidIban(ibanRaw) {
   }
   return remainder === 1;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

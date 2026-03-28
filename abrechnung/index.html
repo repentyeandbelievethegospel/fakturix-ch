@@ -26,7 +26,7 @@
       <button class="tab active" data-tab="import" role="tab" aria-selected="true">Import</button>
       <button class="tab" data-tab="rechnungen" role="tab" aria-selected="false">Rechnungen</button>
       <button class="tab" data-tab="stunden" role="tab" aria-selected="false">Auswertungen</button>
-      <button class="tab" data-tab="firmendaten" role="tab" aria-selected="false">Firmendaten</button>
+      <button class="tab" data-tab="firmendaten" role="tab" aria-selected="false">Einstellungen</button>
       <button class="tab" data-tab="backup" role="tab" aria-selected="false">Wartung</button>
       <button class="tab" data-tab="backup-export" role="tab" aria-selected="false">Backup</button>
       <button class="tab" data-tab="anleitung" role="tab" aria-selected="false">Anleitung</button>
@@ -193,7 +193,8 @@
 
     <section id="firmendaten" class="tab-panel" role="tabpanel" hidden>
       <section class="card">
-        <h2>Firmendaten</h2>
+        <h2>Einstellungen</h2>
+        <h3>Firmendaten</h3>
         <form id="companyForm" class="grid company-form-grid">
           <label class="full-width" data-logo-field="true">Logo
             <input id="companyLogoInput" type="file" accept="image/*" />
@@ -216,8 +217,8 @@
           <label>Telefon<input name="mobile" type="text" required /></label>
           <label>IBAN<input name="iban" type="text" placeholder="CH00 0000 0000 0000 0000 0" required /></label>
           <label>Währung (ISO-Code)<input name="currency" type="text" value="CHF" maxlength="3" required /></label>
-          <label>MwSt Nr<input name="vatNo" type="text" /></label>
-          <label>MwSt Satz %<input name="vatRate" type="number" step="0.01" min="0" value="8.1" /></label>
+          <label>MWST Nr<input name="vatNo" type="text" /></label>
+          <label>MWST Satz %<input name="vatRate" type="number" step="0.01" min="0" value="8.1" /></label>
           <label>Zahlungsfrist (Tage)<input name="paymentTermDays" type="number" min="0" step="1" value="30" required /></label>
 
           <label class="full-width">Rechnungstext
@@ -227,6 +228,12 @@
           
           <label class="full-width">Text für individuelles Beiblatt
             <textarea name="appendixText" rows="4" placeholder="Zusätzliche Informationen für das individuelle Beiblatt."></textarea>
+          </label>
+
+          <h3>Erweitert</h3>
+          <label class="full-width reset-confirm-label">
+            <input name="showSaveButtons" type="checkbox" checked />
+            Speichern-Buttons unter Rechnungen und Auswertungen anzeigen
           </label>
 
           <button type="submit" class="primary company-save-btn">Firmendaten speichern</button>
@@ -401,7 +408,7 @@
         <p>Optional Kontoauszug (CAMT XML) importieren, damit Zahlungen automatisch abgeglichen werden.</p>
 
         <h3>Firmendaten pflegen</h3>
-        <p>Absenderdaten, IBAN, Zahlungsfrist, MwSt Nr, Mwst Satz, Rechnungstext usw. erfassen.</p>
+        <p>Absenderdaten, IBAN, Zahlungsfrist, MWST Nr, MWST Satz, Rechnungstext usw. erfassen.</p>
         <p>Logo hochladen (wird in Rechnungen und Auswertungen verwendet).</p>
 
         <h3>Rechnungen erstellen</h3>
@@ -455,6 +462,17 @@
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
 
 
 
