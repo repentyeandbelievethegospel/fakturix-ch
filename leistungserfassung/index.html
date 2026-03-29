@@ -42,14 +42,6 @@
             <input id="entryCustomerDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Kunde gewählt" />
             <input type="hidden" name="customerId" id="entryCustomer" />
           </label>
-          <label>Mitarbeiter suchen
-            <input id="entryEmployeeSearch" type="text" list="employeeSuggestions" placeholder="Name, Ort, PLZ..." autocomplete="off" required data-required-linked-id="entryEmployee" />
-            <datalist id="employeeSuggestions"></datalist>
-          </label>
-          <label id="entryEmployeeSelectedRow">Mitarbeiter ausgewählt
-            <input id="entryEmployeeDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Mitarbeiter gewählt" />
-            <input type="hidden" name="employeeId" id="entryEmployee" />
-          </label>
           <label>Produkt suchen
             <input id="entryItemSearch" type="text" list="itemSuggestions" placeholder="Produkt / Dienstleistung suchen..." autocomplete="off" required data-required-linked-id="entryItem" />
             <datalist id="itemSuggestions"></datalist>
@@ -62,6 +54,26 @@
             <input name="date" id="entryDate" type="date" required />
           </label>
           <label>Menge<input name="quantity" type="number" step="0.01" min="0.01" required /></label>
+          <label>Position auf mehrere Mitarbeiter aufteilen
+            <select id="entrySplitEmployees" name="splitEmployees" required>
+              <option value="no" selected>Nein</option>
+              <option value="yes">Ja</option>
+            </select>
+          </label>
+          <label id="entryEmployeeSearchRow">Mitarbeiter suchen
+            <input id="entryEmployeeSearch" type="text" list="employeeSuggestions" placeholder="Name, Ort, PLZ..." autocomplete="off" required data-required-linked-id="entryEmployee" />
+            <datalist id="employeeSuggestions"></datalist>
+          </label>
+          <label id="entryEmployeeSelectedRow">Mitarbeiter ausgewählt
+            <input id="entryEmployeeDisplay" class="selection-display" type="text" readonly placeholder="Noch kein Mitarbeiter gewählt" />
+            <input type="hidden" name="employeeId" id="entryEmployee" />
+          </label>
+          <label id="entryEmployeesMultiRow" hidden>
+            <span class="field-label">Mitarbeiter auswählen</span>
+            <div id="entryEmployeesMultiList" class="multi-employee-list"></div>
+            <div id="entryEmployeesSplitDetails" class="multi-employee-split-details" hidden></div>
+            <small id="entryEmployeesSplitHint" class="split-hint" hidden></small>
+          </label>
           <label class="optional-indicator optional-ok">Notiz<input name="note" type="text" placeholder="Optional" /></label>
           <div class="actions">
             <button id="entrySubmitBtn" type="submit" class="primary" disabled>Erfassung speichern</button>
@@ -414,6 +426,16 @@
   <script src="app.js?v=20260320-3"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
 
 
 

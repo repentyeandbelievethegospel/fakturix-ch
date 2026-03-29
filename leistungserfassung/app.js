@@ -9,6 +9,7 @@ let editingEntryId = null;
 let customerSuggestionMap = new Map();
 let employeeSuggestionMap = new Map();
 let itemSuggestionMap = new Map();
+let splitEmployeeQuantityMap = new Map();
 ensureCleaningServiceExists();
 enforceFixedUnitsCatalog();
 
@@ -84,6 +85,13 @@ const entryEmployee = document.getElementById("entryEmployee");
 const entryEmployeeDisplay = document.getElementById("entryEmployeeDisplay");
 const entryEmployeeSearch = document.getElementById("entryEmployeeSearch");
 const employeeSuggestions = document.getElementById("employeeSuggestions");
+const entrySplitEmployees = document.getElementById("entrySplitEmployees");
+const entryEmployeeSearchRow = document.getElementById("entryEmployeeSearchRow") || (entryEmployeeSearch ? entryEmployeeSearch.closest("label") : null);
+const entryEmployeeSelectedRow = document.getElementById("entryEmployeeSelectedRow");
+const entryEmployeesMultiRow = document.getElementById("entryEmployeesMultiRow");
+const entryEmployeesMultiList = document.getElementById("entryEmployeesMultiList");
+const entryEmployeesSplitDetails = document.getElementById("entryEmployeesSplitDetails");
+const entryEmployeesSplitHint = document.getElementById("entryEmployeesSplitHint");
 const entryItem = document.getElementById("entryItem");
 const entryItemDisplay = document.getElementById("entryItemDisplay");
 const entryItemSearch = document.getElementById("entryItemSearch");
@@ -499,6 +507,21 @@ function wireForms() {
     resetEntryForm();
   });
 
+  entrySplitEmployees?.addEventListener("change", () => {
+    syncEntryEmployeeAssignmentMode({ resetSelection: true });
+    refreshRequiredFieldStates();
+  });
+
+  entryEmployeesMultiList?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (!target.classList.contains("entry-employee-multi")) return;
+    splitEmployeeQuantityMap = new Map();
+    updateEntryMultiEmployeeSelectionState();
+    renderSplitQuantityInputs();
+    syncEntrySubmitButtonState();
+  });
+
   entryDate.addEventListener("change", () => {
     renderEntries();
   });
@@ -525,30 +548,78 @@ function wireForms() {
     entryQuantityInput.value = digitsOnly;
   });
 
+  entryQuantityInput?.addEventListener("input", () => {
+    if (isSplitEmployeeAssignmentEnabled()) {
+      syncSplitAllocationValidation();
+      syncEntrySubmitButtonState();
+    }
+  });
+
+  entryEmployeesSplitDetails?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (!target.classList.contains("entry-employee-split-qty")) return;
+    const employeeId = String(target.dataset.employeeId || "").trim();
+    if (!employeeId) return;
+    const normalized = parseSplitQuantityInputValue(target.value, isPieceUnitSelected());
+    splitEmployeeQuantityMap.set(employeeId, normalized);
+    target.value = normalized;
+    syncSplitAllocationValidation();
+    syncEntrySubmitButtonState();
+  });
+
   entryForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = formToObject(entryForm);
     const isEditingEntry = Boolean(editingEntryId);
+    const useSplitAcrossEmployees = isSplitEmployeeAssignmentEnabled() && !isEditingEntry;
+
     if (!data.customerId) {
       alert("Bitte zuerst einen Kunden auswählen.");
       return;
     }
-    if (!data.employeeId) {
-      alert("Bitte zuerst einen Mitarbeiter auswählen.");
-      return;
+
+    let assignedEmployeeIds = [];
+    if (useSplitAcrossEmployees) {
+      assignedEmployeeIds = getSelectedSplitEmployeeIds();
+      if (assignedEmployeeIds.length < 2) {
+        alert("Bitte mindestens zwei Mitarbeiter auswählen.");
+        return;
+      }
+    } else {
+      if (!data.employeeId) {
+        alert("Bitte zuerst einen Mitarbeiter auswählen.");
+        return;
+      }
+      assignedEmployeeIds = [data.employeeId];
     }
+
     if (!data.itemId) {
       alert("Bitte eine Dienstleistung / ein Produkt auswählen.");
       return;
     }
+
     const item = state.items.find((i) => i.id === data.itemId);
     const quantity = Number(data.quantity);
     if (!Number.isFinite(quantity) || quantity <= 0) {
       alert("Bitte eine gueltige Menge eingeben.");
       return;
     }
-    if (getItemUnitName(item) === "Stk" && !Number.isInteger(quantity)) {
+
+    const isPieceUnit = getItemUnitName(item) === "Stk";
+    if (isPieceUnit && !Number.isInteger(quantity)) {
       alert("Bei Einheit 'Stk' sind nur ganze Zahlen erlaubt.");
+      entryForm.quantity.focus();
+      return;
+    }
+
+    const normalizedQuantity = isPieceUnit ? Math.trunc(quantity) : quantity;
+    const splitAssignments = useSplitAcrossEmployees
+      ? getSplitAssignmentsFromInputs(assignedEmployeeIds, normalizedQuantity, isPieceUnit)
+      : { ok: true, assignments: [{ employeeId: assignedEmployeeIds[0], quantity: normalizedQuantity }], sum: normalizedQuantity };
+
+    if (!splitAssignments.ok) {
+      alert(splitAssignments.message || "Die Aufteilung auf Mitarbeiter ist ungültig.");
       entryForm.quantity.focus();
       return;
     }
@@ -563,59 +634,45 @@ function wireForms() {
       ? existingEntry.costPrice
       : resolvedCostPrice;
 
-    const entry = {
-      id: editingEntryId || generateId(),
-      customerId: data.customerId,
-      employeeId: data.employeeId,
-      itemId: data.itemId,
-      date: data.date,
-      quantity: getItemUnitName(item) === "Stk" ? Math.trunc(quantity) : quantity,
-      note: data.note?.trim() || "",
-      unitPrice,
-      costPrice
-    };
+    let mergedCount = 0;
+    let createdCount = 0;
 
-    let wasMerged = false;
+    if (isEditingEntry) {
+      const entry = {
+        id: editingEntryId || generateId(),
+        customerId: data.customerId,
+        employeeId: data.employeeId,
+        itemId: data.itemId,
+        date: data.date,
+        quantity: normalizedQuantity,
+        note: data.note?.trim() || "",
+        unitPrice,
+        costPrice
+      };
 
-    if (editingEntryId) {
       const index = state.entries.findIndex((e) => e.id === editingEntryId);
       if (index >= 0) state.entries[index] = entry;
       else state.entries.push(entry);
     } else {
-      const normalizedNote = String(entry.note || "").trim();
-      const mergeIndex = state.entries.findIndex((e) =>
-        String(e.customerId || "") === String(entry.customerId || "") &&
-        String(e.employeeId || "") === String(entry.employeeId || "") &&
-        String(e.itemId || "") === String(entry.itemId || "") &&
-        String(e.date || "") === String(entry.date || "") &&
-        Math.round((Number(e.unitPrice) || 0) * 100) === Math.round((Number(entry.unitPrice) || 0) * 100) &&
-        String(e.note || "").trim() === normalizedNote
-      );
-
-      if (mergeIndex >= 0) {
-        const mergedEntry = { ...state.entries[mergeIndex] };
-        const mergedQty = (Number(mergedEntry.quantity) || 0) + (Number(entry.quantity) || 0);
-        mergedEntry.quantity = getItemUnitName(item) === "Stk" ? Math.trunc(mergedQty) : mergedQty;
-        mergedEntry.unitPrice = entry.unitPrice;
-        mergedEntry.costPrice = entry.costPrice;
-        state.entries[mergeIndex] = mergedEntry;
-        wasMerged = true;
-      } else {
-        state.entries.push(entry);
-        wasMerged = false;
-      }
+      splitAssignments.assignments.forEach(({ employeeId, quantity: employeeQuantity }) => {
+        const entry = {
+          id: generateId(),
+          customerId: data.customerId,
+          employeeId,
+          itemId: data.itemId,
+          date: data.date,
+          quantity: employeeQuantity,
+          note: data.note?.trim() || "",
+          unitPrice,
+          costPrice
+        };
+        const merged = mergeEntryIntoState(entry, item);
+        if (merged) mergedCount += 1;
+        else createdCount += 1;
+      });
     }
 
     saveState();
-    entryForm.quantity.value = "";
-    entryForm.note.value = "";
-    entryItem.value = "";
-    clearSelectedCustomer();
-    entryCustomerSearch.value = "";
-    clearSelectedEmployee();
-    entryEmployeeSearch.value = "";
-    renderCustomerSuggestions("");
-    renderEmployeeSuggestions("");
     resetEntryForm();
     updateEntryQuantityConstraints();
     refreshRequiredFieldStates();
@@ -623,7 +680,13 @@ function wireForms() {
 
     if (isEditingEntry) {
       showFlashMessage("Erfassung aktualisiert");
-    } else if (wasMerged) {
+    } else if (useSplitAcrossEmployees) {
+      const details = [];
+      details.push(`${assignedEmployeeIds.length} Mitarbeiter`);
+      details.push(`${createdCount} neu`);
+      if (mergedCount > 0) details.push(`${mergedCount} zusammengeführt`);
+      showFlashMessage(`Erfassung aufgeteilt (${details.join(", ")})`);
+    } else if (mergedCount > 0) {
       showFlashMessage("+ Menge zum bestehenden Eintrag addiert");
     } else {
       showFlashMessage("Erfassung gespeichert");
@@ -918,8 +981,11 @@ function wireSearch() {
   entryCustomerSearch.addEventListener("focus", () => {
     renderCustomerSuggestions(entryCustomerSearch.value);
   });
-
   const syncEmployeeSelectionFromSearch = () => {
+    if (isSplitEmployeeAssignmentEnabled()) {
+      clearSelectedEmployee();
+      return;
+    }
     let matchedId = getEmployeeIdFromSuggestion(entryEmployeeSearch.value);
     if (!matchedId) {
       renderEmployeeSuggestions(entryEmployeeSearch.value);
@@ -1386,6 +1452,11 @@ function editEntry(entryId) {
   const entry = state.entries.find((e) => e.id === entryId);
   if (!entry) return;
   setSelectedCustomer(entry.customerId);
+  if (entrySplitEmployees) {
+    entrySplitEmployees.value = "no";
+    entrySplitEmployees.disabled = true;
+  }
+  syncEntryEmployeeAssignmentMode({ resetSelection: true });
   setSelectedEmployee(entry.employeeId);
   const editCustomer = state.customers.find((c) => c.id === entry.customerId);
   entryCustomerSearch.value = editCustomer ? getCustomerDisplay(editCustomer) : "";
@@ -1471,11 +1542,18 @@ function resetEntryForm() {
   entryForm.note.value = "";
   clearSelectedCustomer();
   entryCustomerSearch.value = "";
+  if (entrySplitEmployees) {
+    entrySplitEmployees.value = "no";
+    entrySplitEmployees.disabled = false;
+  }
   clearSelectedEmployee();
   entryEmployeeSearch.value = "";
+  clearSelectedSplitEmployeeIds();
   renderCustomerSuggestions("");
   renderEmployeeSuggestions("");
+  renderEntryEmployeesMultiOptions();
   renderItemSuggestions("");
+  syncEntryEmployeeAssignmentMode({ resetSelection: false });
   updateEntryQuantityConstraints();
   refreshRequiredFieldStates();
   entryForm.quantity?.focus();
@@ -1653,6 +1731,7 @@ function refreshRequiredFieldStates() {
   const optionalFields = document.querySelectorAll("form input:not([required]):not([type='hidden']), form select:not([required]), form textarea:not([required])");
   optionalFields.forEach((field) => updateOptionalFieldState(field));
   updateEntrySelectionDisplayStates();
+  updateEntryMultiEmployeeSelectionState();
   syncEntrySubmitButtonState();
 }
 
@@ -1721,18 +1800,22 @@ function isFormReadyForSubmit(form) {
 }
 
 function isEntryFormReadyForSubmit() {
-  return isFormReadyForSubmit(entryForm);
+  const baseReady = isFormReadyForSubmit(entryForm);
+  if (!baseReady) return false;
+  if (isSplitEmployeeAssignmentEnabled()) {
+    return syncSplitAllocationValidation();
+  }
+  return true;
 }
 
 function syncEntrySubmitButtonState() {
-  if (entrySubmitBtn) entrySubmitBtn.disabled = !isFormReadyForSubmit(entryForm);
+  if (entrySubmitBtn) entrySubmitBtn.disabled = !isEntryFormReadyForSubmit();
   if (customerSubmitBtn) customerSubmitBtn.disabled = !isFormReadyForSubmit(customerForm);
   if (employeeSubmitBtn) employeeSubmitBtn.disabled = !isFormReadyForSubmit(employeeForm);
   if (itemSubmitBtn) itemSubmitBtn.disabled = !isFormReadyForSubmit(itemForm);
   if (unitSubmitBtn) unitSubmitBtn.disabled = !isFormReadyForSubmit(unitForm);
   if (productTypeSubmitBtn) productTypeSubmitBtn.disabled = !isFormReadyForSubmit(productTypeForm);
 }
-
 function syncCustomerNameRequirement() {
   if (!customerForm) return;
   const companyValue = String(customerForm.company?.value ?? "").trim();
@@ -2139,7 +2222,9 @@ function renderEntrySelects() {
 
   renderCustomerSuggestions(entryCustomerSearch.value);
   renderEmployeeSuggestions(entryEmployeeSearch.value);
+  renderEntryEmployeesMultiOptions();
   renderItemSuggestions(entryItemSearch.value);
+  syncEntryEmployeeAssignmentMode({ resetSelection: false });
   updateEntryQuantityConstraints();
 }
 
@@ -2166,11 +2251,302 @@ function isPieceUnitSelected() {
   return getItemUnitName(selectedItem) === "Stk";
 }
 
+function isSplitEmployeeAssignmentEnabled() {
+  return String(entrySplitEmployees?.value || "no").toLowerCase() === "yes";
+}
+
+function getSelectedSplitEmployeeIds() {
+  if (!entryEmployeesMultiList) return [];
+  return [...entryEmployeesMultiList.querySelectorAll("input.entry-employee-multi[type=\"checkbox\"]:checked")]
+    .map((input) => String(input.value || "").trim())
+    .filter(Boolean);
+}
+
+function clearSelectedSplitEmployeeIds() {
+  if (!entryEmployeesMultiList) return;
+  entryEmployeesMultiList.querySelectorAll("input.entry-employee-multi[type=\"checkbox\"]").forEach((input) => {
+    input.checked = false;
+  });
+  splitEmployeeQuantityMap = new Map();
+  if (entryEmployeesSplitDetails) {
+    entryEmployeesSplitDetails.innerHTML = "";
+    entryEmployeesSplitDetails.hidden = true;
+  }
+  if (entryEmployeesSplitHint) {
+    entryEmployeesSplitHint.textContent = "";
+    entryEmployeesSplitHint.hidden = true;
+    entryEmployeesSplitHint.classList.remove("split-hint-ok", "split-hint-error");
+  }
+}
+
+function getSplitQuantityScale(isPieceUnit) {
+  return isPieceUnit ? 1 : 100;
+}
+
+function normalizeSplitQuantity(value, isPieceUnit) {
+  const scale = getSplitQuantityScale(isPieceUnit);
+  const scaled = Math.round(Number(value || 0) * scale);
+  return scaled / scale;
+}
+
+function formatSplitQuantityValue(value, isPieceUnit) {
+  const normalized = normalizeSplitQuantity(value, isPieceUnit);
+  if (isPieceUnit) return String(Math.max(0, Math.trunc(normalized)));
+  return normalized.toFixed(2);
+}
+
+function parseSplitQuantityInputValue(rawValue, isPieceUnit) {
+  const normalizedRaw = String(rawValue ?? "").replace(",", ".").trim();
+  if (!normalizedRaw) return "";
+  const parsed = Number(normalizedRaw);
+  if (!Number.isFinite(parsed) || parsed < 0) return "";
+  if (isPieceUnit) return String(Math.max(0, Math.trunc(parsed)));
+  return formatSplitQuantityValue(parsed, false);
+}
+
+function getMainQuantityValue(isPieceUnit) {
+  const parsed = Number(String(entryQuantityInput?.value || "").replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return normalizeSplitQuantity(parsed, isPieceUnit);
+}
+
+function getDefaultSplitQuantities(mainQuantity, employeeIds, isPieceUnit) {
+  const count = employeeIds.length;
+  if (!count || mainQuantity <= 0) return new Map();
+  const map = new Map();
+  const scale = getSplitQuantityScale(isPieceUnit);
+  const totalScaled = Math.round(mainQuantity * scale);
+  const base = Math.floor(totalScaled / count);
+  const remainder = totalScaled - base * count;
+
+  employeeIds.forEach((employeeId, index) => {
+    const scaledValue = base + (index < remainder ? 1 : 0);
+    const value = scaledValue / scale;
+    map.set(employeeId, formatSplitQuantityValue(value, isPieceUnit));
+  });
+  return map;
+}
+function updateEntryMultiEmployeeSelectionState() {
+  if (!entryEmployeesMultiRow || !entryEmployeesMultiList) return;
+  const isSplitMode = isSplitEmployeeAssignmentEnabled();
+  const selectedCount = getSelectedSplitEmployeeIds().length;
+  const isValid = !isSplitMode || selectedCount > 1;
+
+  entryEmployeesMultiRow.classList.add("required-indicator");
+  entryEmployeesMultiRow.classList.toggle("required-empty", !isValid);
+  entryEmployeesMultiRow.classList.toggle("required-filled", isValid);
+  entryEmployeesMultiList.classList.toggle("required-empty", !isValid);
+  entryEmployeesMultiList.classList.remove("required-filled");
+}
+
+function renderEntryEmployeesMultiOptions() {
+  if (!entryEmployeesMultiList) return;
+  const selectedBeforeRender = new Set(getSelectedSplitEmployeeIds());
+  const activeEmployees = state.employees
+    .filter((employee) => !employee.deleted)
+    .slice()
+    .sort((a, b) => getEmployeeDisplay(a).localeCompare(getEmployeeDisplay(b), "de-CH"));
+
+  if (!activeEmployees.length) {
+    entryEmployeesMultiList.innerHTML = "<small>Keine aktiven Mitarbeiter vorhanden.</small>";
+    updateEntryMultiEmployeeSelectionState();
+    return;
+  }
+
+  entryEmployeesMultiList.innerHTML = activeEmployees
+    .map((employee) => {
+      const checked = selectedBeforeRender.has(String(employee.id || "")) ? " checked" : "";
+      return `<label class="multi-employee-option"><input class="entry-employee-multi" type="checkbox" value="${escapeHtml(employee.id)}"${checked} /> <span>${escapeHtml(getEmployeeDisplay(employee))}</span></label>`;
+    })
+    .join("");
+
+  updateEntryMultiEmployeeSelectionState();
+}
+
+function renderSplitQuantityInputs() {
+  if (!entryEmployeesSplitDetails) return;
+  const isSplitMode = isSplitEmployeeAssignmentEnabled();
+  const selectedIds = getSelectedSplitEmployeeIds();
+
+  if (!isSplitMode || !selectedIds.length) {
+    entryEmployeesSplitDetails.innerHTML = "";
+    entryEmployeesSplitDetails.hidden = true;
+    if (entryEmployeesSplitHint) {
+      entryEmployeesSplitHint.textContent = "";
+      entryEmployeesSplitHint.hidden = true;
+      entryEmployeesSplitHint.classList.remove("split-hint-ok", "split-hint-error");
+    }
+    return;
+  }
+
+  const isPieceUnit = isPieceUnitSelected();
+  const mainQuantity = getMainQuantityValue(isPieceUnit);
+  const defaultMap = getDefaultSplitQuantities(mainQuantity, selectedIds, isPieceUnit);
+
+  const nextMap = new Map();
+  selectedIds.forEach((employeeId) => {
+    const existing = splitEmployeeQuantityMap.get(employeeId);
+    const value = existing != null && String(existing).trim() !== ""
+      ? parseSplitQuantityInputValue(existing, isPieceUnit)
+      : String(defaultMap.get(employeeId) ?? "");
+    nextMap.set(employeeId, value);
+  });
+  splitEmployeeQuantityMap = nextMap;
+
+  entryEmployeesSplitDetails.innerHTML = selectedIds
+    .map((employeeId) => {
+      const employee = state.employees.find((e) => String(e.id) === String(employeeId));
+      const label = employee ? getEmployeeDisplay(employee) : "Unbekannter Mitarbeiter";
+      const value = String(splitEmployeeQuantityMap.get(employeeId) ?? "");
+      const step = isPieceUnit ? "1" : "0.01";
+      const inputMode = isPieceUnit ? "numeric" : "decimal";
+      return `<div class="multi-employee-split-row"><span class="multi-employee-split-name">${escapeHtml(label)}</span><input class="entry-employee-split-qty" data-employee-id="${escapeHtml(employeeId)}" type="number" min="0" step="${step}" inputmode="${inputMode}" value="${escapeHtml(value)}" /></div>`;
+    })
+    .join("");
+
+  entryEmployeesSplitDetails.hidden = false;
+  syncSplitAllocationValidation();
+}
+
+function getSplitAssignmentsFromInputs(selectedEmployeeIds, mainQuantity, isPieceUnit) {
+  const assignments = selectedEmployeeIds.map((employeeId) => {
+    const raw = String(splitEmployeeQuantityMap.get(employeeId) ?? "").replace(",", ".").trim();
+    const value = Number(raw);
+    return { employeeId, quantity: normalizeSplitQuantity(value, isPieceUnit) };
+  });
+
+  if (assignments.length < 2) {
+    return { ok: false, assignments: [], message: "Bitte mindestens zwei Mitarbeiter auswählen." };
+  }
+
+  if (assignments.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+    return { ok: false, assignments: [], message: "Bitte pro ausgewähltem Mitarbeiter eine Menge grösser als 0 eingeben." };
+  }
+
+  const scale = getSplitQuantityScale(isPieceUnit);
+  const mainScaled = Math.round(mainQuantity * scale);
+  const sumScaled = assignments.reduce((acc, item) => acc + Math.round(item.quantity * scale), 0);
+
+  if (sumScaled !== mainScaled) {
+    return { ok: false, assignments: [], message: "Die Summe der Mitarbeiter-Anteile muss genau der Hauptmenge entsprechen." };
+  }
+
+  const sum = sumScaled / scale;
+  return { ok: true, assignments, sum };
+}
+
+function syncSplitAllocationValidation() {
+  if (!entryEmployeesSplitDetails || !entryEmployeesMultiRow) return true;
+
+  const isSplitMode = isSplitEmployeeAssignmentEnabled();
+  if (!isSplitMode) {
+    entryEmployeesSplitDetails.classList.remove("required-empty", "required-filled");
+    if (entryEmployeesSplitHint) {
+      entryEmployeesSplitHint.hidden = true;
+      entryEmployeesSplitHint.textContent = "";
+      entryEmployeesSplitHint.classList.remove("split-hint-error", "split-hint-ok");
+    }
+    return true;
+  }
+
+  const selectedIds = getSelectedSplitEmployeeIds();
+  const isPieceUnit = isPieceUnitSelected();
+  const mainQuantity = getMainQuantityValue(isPieceUnit);
+  const result = getSplitAssignmentsFromInputs(selectedIds, mainQuantity, isPieceUnit);
+
+  entryEmployeesSplitDetails.classList.toggle("required-empty", !result.ok);
+  entryEmployeesSplitDetails.classList.toggle("required-filled", result.ok);
+
+  if (entryEmployeesSplitHint) {
+    entryEmployeesSplitHint.hidden = false;
+    if (result.ok) {
+      const sum = Number(result.sum || 0);
+      entryEmployeesSplitHint.textContent = `Zugewiesen: ${sum} / Hauptmenge: ${mainQuantity} (exakt)`;
+      entryEmployeesSplitHint.classList.add("split-hint-ok");
+      entryEmployeesSplitHint.classList.remove("split-hint-error");
+    } else {
+      entryEmployeesSplitHint.textContent = result.message || "Aufteilung prüfen";
+      entryEmployeesSplitHint.classList.add("split-hint-error");
+      entryEmployeesSplitHint.classList.remove("split-hint-ok");
+    }
+  }
+
+  return result.ok;
+}
+
+function syncEntryEmployeeAssignmentMode({ resetSelection = false } = {}) {
+  const isSplitMode = isSplitEmployeeAssignmentEnabled();
+
+  if (entryEmployeeSearchRow) entryEmployeeSearchRow.hidden = isSplitMode;
+  if (entryEmployeeSelectedRow) entryEmployeeSelectedRow.hidden = true;
+  if (entryEmployeesMultiRow) entryEmployeesMultiRow.hidden = !isSplitMode;
+
+  if (entryEmployeeSearch) {
+    entryEmployeeSearch.required = !isSplitMode;
+  }
+
+  if (isSplitMode) {
+    if (resetSelection) {
+      entryEmployeeSearch.value = "";
+      clearSelectedEmployee();
+      clearSelectedSplitEmployeeIds();
+    }
+    renderEntryEmployeesMultiOptions();
+    renderSplitQuantityInputs();
+  } else {
+    if (resetSelection) {
+      clearSelectedSplitEmployeeIds();
+    }
+    if (entryEmployeesSplitDetails) {
+      entryEmployeesSplitDetails.hidden = true;
+      entryEmployeesSplitDetails.innerHTML = "";
+    }
+    if (entryEmployeesSplitHint) {
+      entryEmployeesSplitHint.hidden = true;
+      entryEmployeesSplitHint.textContent = "";
+      entryEmployeesSplitHint.classList.remove("split-hint-error", "split-hint-ok");
+    }
+  }
+
+  updateEntryMultiEmployeeSelectionState();
+  syncSplitAllocationValidation();
+}
+
+function mergeEntryIntoState(entry, item) {
+  const normalizedNote = String(entry.note || "").trim();
+  const mergeIndex = state.entries.findIndex((existing) =>
+    String(existing.customerId || "") === String(entry.customerId || "") &&
+    String(existing.employeeId || "") === String(entry.employeeId || "") &&
+    String(existing.itemId || "") === String(entry.itemId || "") &&
+    String(existing.date || "") === String(entry.date || "") &&
+    Math.round((Number(existing.unitPrice) || 0) * 100) === Math.round((Number(entry.unitPrice) || 0) * 100) &&
+    String(existing.note || "").trim() === normalizedNote
+  );
+
+  if (mergeIndex >= 0) {
+    const mergedEntry = { ...state.entries[mergeIndex] };
+    const mergedQty = (Number(mergedEntry.quantity) || 0) + (Number(entry.quantity) || 0);
+    mergedEntry.quantity = getItemUnitName(item) === "Stk" ? Math.trunc(mergedQty) : Number(mergedQty.toFixed(4));
+    mergedEntry.unitPrice = entry.unitPrice;
+    mergedEntry.costPrice = entry.costPrice;
+    state.entries[mergeIndex] = mergedEntry;
+    return true;
+  }
+
+  state.entries.push(entry);
+  return false;
+}
+
 function resetEntryCustomerSelection() {
   entryCustomerSearch.value = "";
   clearSelectedCustomer();
+  if (entrySplitEmployees) {
+    entrySplitEmployees.value = "no";
+    entrySplitEmployees.disabled = false;
+  }
   entryEmployeeSearch.value = "";
   clearSelectedEmployee();
+  clearSelectedSplitEmployeeIds();
   entryItemSearch.value = "";
   clearSelectedItem();
   renderEntrySelects();
@@ -3109,6 +3485,45 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
