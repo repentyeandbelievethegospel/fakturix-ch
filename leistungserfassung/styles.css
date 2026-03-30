@@ -217,6 +217,8 @@ button {
   border-radius: 0.6rem;
   padding: 0.65rem 0.8rem;
   cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+  transform: translateY(0);
 }
 
 button.primary {
@@ -235,6 +237,26 @@ button.danger {
   background: #b91c1c;
   color: #ffffff;
   font-weight: 600;
+}
+
+button:not(:disabled):hover,
+.tab:hover,
+.subtab:hover {
+  filter: brightness(0.98);
+}
+
+button:not(:disabled):active,
+.tab:active,
+.subtab:active {
+  transform: translateY(1px) scale(0.995);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+
+button:focus-visible,
+.tab:focus-visible,
+.subtab:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
 }
 
 .list {
@@ -1057,27 +1079,6 @@ button:disabled {
   margin-top: 0.1rem !important;
 }
 
-/* Mehrfachauswahl: Marker direkt hinter 'Mitarbeiter auswählen' */
-#entryEmployeesMultiRow.required-indicator::after {
-  content: none !important;
-}
-
-#entryEmployeesMultiRow .field-label {
-  display: inline-block;
-}
-
-#entryEmployeesMultiRow.required-indicator.required-empty .field-label::after {
-  content: " !";
-  color: #dc2626;
-  font-weight: 800;
-}
-
-#entryEmployeesMultiRow.required-indicator.required-filled .field-label::after {
-  content: " ✓";
-  color: #16a34a;
-  font-weight: 800;
-}
-
 /* Mehrfachauswahl Mitarbeiter: Marker pro Checkbox */
 #entryEmployeesMultiRow .multi-employee-option input[type="checkbox"] + span::after {
   content: " !";
@@ -1104,4 +1105,133 @@ button:disabled {
 #entryForm > #entryCustomerSelectedRow,
 #entryForm > #entryItemSelectedRow {
   display: none !important;
+}
+
+/* Stammdaten: Formulare einspaltig wie Erfassung */
+#stammdaten .form-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+#stammdaten .form-grid > * {
+  grid-column: 1 / -1;
+}
+
+#stammdaten .field-row {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+#stammdaten .form-grid,
+#stammdaten .form-grid > label,
+#stammdaten .form-grid > .actions,
+#stammdaten .form-grid input,
+#stammdaten .form-grid select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#stammdaten .form-grid > .actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+}
+
+#stammdaten .form-grid > .actions button {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: none;
+}
+
+/* Einstellungen: gleiche Feldgroessen wie Erfassung */
+#settingsForm {
+  grid-template-columns: minmax(0, 1fr) !important;
+  width: 100%;
+}
+
+#settingsForm > * {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#settingsForm > label,
+#settingsForm > label > input,
+#settingsForm > label > select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#settingsForm > button,
+#settingsForm > .actions,
+#settingsForm > .actions > button {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+
+/* Erfassung: Marker unter dem Feld wie in Stammdaten */
+#entryForm label.required-indicator,
+#entryForm label.optional-indicator {
+  padding-right: 0 !important;
+}
+
+#entryForm label.required-indicator::after,
+#entryForm label.optional-indicator::after {
+  position: static !important;
+  right: auto !important;
+  top: auto !important;
+  display: inline-block;
+  margin-top: 0.1rem;
+  justify-self: start;
+}
+
+
+/* Auswertung: Monatsfeld darf den Frame nie überlaufen */
+#auswertung label:has(#reportMonth),
+#reportMonth {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#reportMonth {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.hours-customer-divider {
+  list-style: none;
+  height: 0;
+  border-top: 1px dashed #9ca3af;
+  margin: 0.2rem 0;
+}
+
+.hours-customer-total {
+  border-top: 1px solid #cbd5e1;
+  padding-top: 0.2rem;
+  margin-top: 0.12rem;
+  font-weight: 700;
+}
+
+.hours-customer-total .col-customer {
+  color: #111827;
+}
+
+.hours-customer-total .col-rate {
+  color: transparent;
+}
+
+.hours-day-total {
+  border-bottom: 3px double #9ca3af;
+  padding-bottom: 0.28rem;
 }

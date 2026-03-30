@@ -2790,7 +2790,7 @@ function renderReportOverview() {
     const day = offset + 1;
     const isoDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const dayMap = byDay.get(isoDate) || new Map();
-    const rows = [...dayMap.values()].sort((a, b) => b.amount - a.amount || a.customerName.localeCompare(b.customerName, "de-CH"));
+    const rows = [...dayMap.values()].sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH") || a.employeeName.localeCompare(b.employeeName, "de-CH"));
     const totalHours = rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
     const totalAmount = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
 
@@ -2798,24 +2798,59 @@ function renderReportOverview() {
     const weekdayShort = shortWeekdays[weekdayIndex] || "";
     const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
 
-    const rowsHtml = rows
-      .map((row) => `
-        <li class="hours-calendar-row hours-money-row">
-          <span class="col-customer">${escapeHtml(row.customerName)}</span>
-          <span class="col-employee">${escapeHtml(row.employeeName)}</span>
-          <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))} h</strong>
-          <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
-          <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
-        </li>
-      `)
-      .join("");
+    const rowsHtml = (() => {
+      if (!rows.length) return "";
+      let html = "";
+      let currentCustomer = "";
+      let customerHours = 0;
+      let customerAmount = 0;
+      const flushCustomerTotal = () => {
+        if (!currentCustomer) return;
+        html += `
+          <li class="hours-calendar-row hours-money-row hours-customer-total">
+            <span class="col-customer">Kundentotal</span>
+            <span class="col-employee"></span>
+            <strong class="col-hours">${escapeHtml(String((Math.round((customerHours || 0) * 100) / 100).toLocaleString("de-CH")))} h</strong>
+            <strong class="col-rate"></strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(customerAmount))}</strong>
+          </li>
+        `;
+      };
+      rows.forEach((row, index) => {
+        const customerChanged = currentCustomer && currentCustomer !== row.customerName;
+        if (customerChanged) {
+          flushCustomerTotal();
+          html += `<li class="hours-customer-divider" aria-hidden="true"></li>`;
+          customerHours = 0;
+          customerAmount = 0;
+        }
+        if (!currentCustomer || currentCustomer !== row.customerName) {
+          currentCustomer = row.customerName;
+        }
+        customerHours += Number(row.qty) || 0;
+        customerAmount += Number(row.amount) || 0;
+        html += `
+          <li class="hours-calendar-row hours-money-row">
+            <span class="col-customer">${escapeHtml(row.customerName)}</span>
+            <span class="col-employee">${escapeHtml(row.employeeName)}</span>
+            <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))} h</strong>
+            <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
+          </li>
+        `;
+        if (index === rows.length - 1) {
+          flushCustomerTotal();
+        }
+      });
+      return html;
+    })();
 
     const detailsHtml = rows.length
       ? `
         <div class="hours-calendar-cell-columns hours-money-columns"><span>Kunde</span><span>Mitarbeiter</span><span>Stunden</span><span>Ansatz</span><span>Total</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total">
-          <span>Total</span>
+        <div class="hours-calendar-total hours-money-total hours-day-total">
+          <span>Tagestotal</span>
           <strong>${escapeHtml(String((Math.round((totalHours || 0) * 100) / 100).toLocaleString("de-CH")))} h</strong>
           <strong>${escapeHtml(formatCurrency(totalAmount))}</strong>
         </div>
@@ -2922,7 +2957,7 @@ function renderProductReportOverview() {
     const day = offset + 1;
     const isoDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const dayMap = byDay.get(isoDate) || new Map();
-    const rows = [...dayMap.values()].sort((a, b) => b.amount - a.amount || a.customerName.localeCompare(b.customerName, "de-CH"));
+    const rows = [...dayMap.values()].sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH") || a.itemName.localeCompare(b.itemName, "de-CH"));
     const totalQty = rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
     const totalAmount = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
 
@@ -2930,24 +2965,59 @@ function renderProductReportOverview() {
     const weekdayShort = shortWeekdays[weekdayIndex] || "";
     const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
 
-    const rowsHtml = rows
-      .map((row) => `
-        <li class="hours-calendar-row hours-money-row products-row">
-          <span class="col-customer">${escapeHtml(row.customerName)}</span>
-          <span class="col-employee">${escapeHtml(row.itemName)}</span>
-          <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))} Stk</strong>
-          <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
-          <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
-        </li>
-      `)
-      .join("");
+    const rowsHtml = (() => {
+      if (!rows.length) return "";
+      let html = "";
+      let currentCustomer = "";
+      let customerQty = 0;
+      let customerAmount = 0;
+      const flushCustomerTotal = () => {
+        if (!currentCustomer) return;
+        html += `
+          <li class="hours-calendar-row hours-money-row products-row hours-customer-total">
+            <span class="col-customer">Kundentotal</span>
+            <span class="col-employee"></span>
+            <strong class="col-hours">${escapeHtml(String((Math.round((customerQty || 0) * 100) / 100).toLocaleString("de-CH")))} Stk</strong>
+            <strong class="col-rate"></strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(customerAmount))}</strong>
+          </li>
+        `;
+      };
+      rows.forEach((row, index) => {
+        const customerChanged = currentCustomer && currentCustomer !== row.customerName;
+        if (customerChanged) {
+          flushCustomerTotal();
+          html += `<li class="hours-customer-divider" aria-hidden="true"></li>`;
+          customerQty = 0;
+          customerAmount = 0;
+        }
+        if (!currentCustomer || currentCustomer !== row.customerName) {
+          currentCustomer = row.customerName;
+        }
+        customerQty += Number(row.qty) || 0;
+        customerAmount += Number(row.amount) || 0;
+        html += `
+          <li class="hours-calendar-row hours-money-row products-row">
+            <span class="col-customer">${escapeHtml(row.customerName)}</span>
+            <span class="col-employee">${escapeHtml(row.itemName)}</span>
+            <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))} Stk</strong>
+            <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
+          </li>
+        `;
+        if (index === rows.length - 1) {
+          flushCustomerTotal();
+        }
+      });
+      return html;
+    })();
 
     const detailsHtml = rows.length
       ? `
         <div class="hours-calendar-cell-columns hours-money-columns products-columns"><span>Kunde</span><span>Produkt</span><span>Stk</span><span>Ansatz</span><span>Total</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total products-total">
-          <span>Total</span>
+        <div class="hours-calendar-total hours-money-total products-total hours-day-total">
+          <span>Tagestotal</span>
           <strong>${escapeHtml(String((Math.round((totalQty || 0) * 100) / 100).toLocaleString("de-CH")))} Stk</strong>
           <strong>${escapeHtml(formatCurrency(totalAmount))}</strong>
         </div>
@@ -3485,6 +3555,17 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
