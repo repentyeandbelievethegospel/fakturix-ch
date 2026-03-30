@@ -109,6 +109,7 @@ let camtLastResultFileName = "";
 let camtLastResultRows = [];
 let companyLogoPreviewObjectUrl = "";
 let pendingDeleteAllInvoiceIds = [];
+let forcePreviousMonthDefaultsOnInitialRender = true;
 
 wireImport();
 wireCamtImport();
@@ -123,7 +124,8 @@ wireBackup();
 wireResetConfirmation();
 wireImportBackupValidation();
 renderAll();
-
+setTimeout(forcePreviousMonthSelection, 0);
+window.addEventListener("pageshow", () => forcePreviousMonthSelection());
 
 function wireTabs() {
   tabs.forEach((tab) => {
@@ -186,7 +188,8 @@ function baseState() {
       paymentTermDays: 30,
       invoiceText: "Vielen Dank für Ihren Auftrag.",
       appendixText: "",
-      showSaveButtons: true
+      showSaveButtons: true,
+      mergeSameDayHourlyRows: false
     },
     customers: [],
     employees: [],
@@ -205,7 +208,12 @@ function wireBackup() {
   };
   const syncCleanupConfirmText = () => {
     if (!invoiceCleanupConfirmValue) return;
-    const months = Math.min(24, Math.max(1, Math.round(toNumber(invoiceCleanupMonths?.value, 12))));
+    const rawValue = String(invoiceCleanupMonths?.value || "12").trim().toLowerCase();
+    if (rawValue === "all") {
+      invoiceCleanupConfirmValue.textContent = "alle";
+      return;
+    }
+    const months = Math.min(24, Math.max(1, Math.round(toNumber(rawValue, 12))));
     invoiceCleanupConfirmValue.textContent = `${months} ${months === 1 ? "Monat" : "Monate"}`;
   };
   backupImportFile.addEventListener("change", syncBackupImportButton);
@@ -307,13 +315,21 @@ function wireBackup() {
       return;
     }
 
-    const months = Math.min(24, Math.max(1, Math.round(toNumber(invoiceCleanupMonths.value, 6))));
-    const invoiceCandidates = getInvoicesOlderThanMonths(months);
-    const entryCandidates = getEntriesOlderThanMonths(months);
+    const rawCleanupValue = String(invoiceCleanupMonths.value || "12").trim().toLowerCase();
+    const isAllCleanup = rawCleanupValue === "all";
+    const months = Math.min(24, Math.max(1, Math.round(toNumber(rawCleanupValue, 6))));
+    const invoiceCandidates = isAllCleanup
+      ? state.invoices.slice().sort((a, b) => String(a.month || "").localeCompare(String(b.month || "")))
+      : getInvoicesOlderThanMonths(months);
+    const entryCandidates = isAllCleanup
+      ? state.entries.slice().sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+      : getEntriesOlderThanMonths(months);
 
     if (!invoiceCandidates.length && !entryCandidates.length) {
-      backupStatus.textContent = `Keine Erfassungen/Rechnungen älter als ${months} Monate gefunden.`;
-      showMaintenanceActionDialog({ title: "Datenbereinigung", summary: `Keine Erfassungen/Rechnungen älter als ${months} Monate gefunden.`, kind: "warning" });
+      backupStatus.textContent = isAllCleanup
+        ? "Keine Erfassungen/Rechnungen vorhanden."
+        : `Keine Erfassungen/Rechnungen älter als ${months} Monate gefunden.`;
+      showMaintenanceActionDialog({ title: "Datenbereinigung", summary: backupStatus.textContent, kind: "warning" });
       renderCleanupResult([], []);
       return;
     }
@@ -329,23 +345,34 @@ function wireBackup() {
 
     if (
       !confirm(
-        `Es werden gelöscht:\n- Rechnungen: ${invoiceCandidates.length}\n- Erfassungen: ${entryCandidates.length}${previewBlock}`
+        `Es werden gelöscht${isAllCleanup ? " (alle)" : ""}:\n- Rechnungen: ${invoiceCandidates.length}\n- Erfassungen: ${entryCandidates.length}${previewBlock}`
       )
     ) return;
     if (!confirm("Sind Sie wirklich sicher?")) return;
 
-    const cleanupResultData = pruneDataOlderThanMonths(months);
+    const cleanupResultData = isAllCleanup
+      ? { removedInvoices: invoiceCandidates, removedEntries: entryCandidates }
+      : pruneDataOlderThanMonths(months);
+    if (isAllCleanup) {
+      state.invoices = [];
+      state.entries = [];
+    }
+    const removedMasterData = pruneSoftDeletedMasterDataWithoutDependencies();
+
     saveState();
     renderAll();
     setPreviewHtml("");
 
-    backupStatus.textContent = `Gelöscht: ${cleanupResultData.removedInvoices.length} Rechnungen, ${cleanupResultData.removedEntries.length} Erfassungen.`;
+    backupStatus.textContent = `Gelöscht: ${cleanupResultData.removedInvoices.length} Rechnungen, ${cleanupResultData.removedEntries.length} Erfassungen. Stammdaten (deleted + ohne Abhängigkeit): Kunden ${removedMasterData.removedCustomers.length}, Mitarbeiter ${removedMasterData.removedEmployees.length}, Produkte ${removedMasterData.removedItems.length}.`;
     showMaintenanceActionDialog({
       title: "Datenbereinigung",
       summary: `Gelöscht: ${cleanupResultData.removedInvoices.length} Rechnungen, ${cleanupResultData.removedEntries.length} Erfassungen.`,
       details: [
         `${cleanupResultData.removedInvoices.length} Rechnung(en) entfernt`,
-        `${cleanupResultData.removedEntries.length} Erfassung(en) entfernt`
+        `${cleanupResultData.removedEntries.length} Erfassung(en) entfernt`,
+        `Kunden entfernt (deleted + ohne Abhängigkeit): ${removedMasterData.removedCustomers.length}`,
+        `Mitarbeiter entfernt (deleted + ohne Abhängigkeit): ${removedMasterData.removedEmployees.length}`,
+        `Produkte entfernt (deleted + ohne Abhängigkeit): ${removedMasterData.removedItems.length}`
       ],
       kind: "success"
     });
@@ -1194,6 +1221,10 @@ function renderInvoiceList() {
           <div class="top">
             <div>
               <strong>${escapeHtml(inv.invoiceNo)}</strong><br>
+              <small class="invoice-filename-row">
+                Dateiname: ${escapeHtml(`${buildInvoicePdfFileName(inv)}.pdf`)}
+                <button type="button" class="secondary copy-filename-btn" data-action="copy-filename" data-id="${escapeHtml(inv.id)}">Kopieren</button>
+              </small><br>
               <small>${escapeHtml(customerName)} | Monat ${escapeHtml(formatMonthCH(inv.month))}</small><br>
               <small>Fällig: ${escapeHtml(formatDateCH(inv.dueDate))} | Total: ${formatCurrency(inv.grandTotal)}</small>
             </div>
@@ -1329,6 +1360,7 @@ function wireCompany() {
     state.company.invoiceText = String(data.invoiceText || "").trim();
     state.company.appendixText = String(data.appendixText || "").trim();
     state.company.showSaveButtons = Boolean(companyForm.showSaveButtons?.checked);
+    state.company.mergeSameDayHourlyRows = Boolean(companyForm.mergeSameDayHourlyRows?.checked);
 
     saveState();
     companyStatus.textContent = "Firmendaten gespeichert.";
@@ -1656,6 +1688,18 @@ function wireInvoiceList() {
     const invoice = state.invoices.find((i) => i.id === invoiceId);
     if (!invoice) return;
 
+    if (action === "copy-filename") {
+      const fileName = `${buildInvoicePdfFileName(invoice)}.pdf`;
+      copyTextToClipboard(fileName)
+        .then(() => {
+          billingStatus.textContent = `Dateiname kopiert: ${fileName}`;
+        })
+        .catch(() => {
+          billingStatus.textContent = "Dateiname konnte nicht kopiert werden.";
+        });
+      return;
+    }
+
     if (action === "view") {
       const html = renderInvoiceHtml(invoice);
       setPreviewHtml(html);
@@ -1756,7 +1800,7 @@ function wireHoursReport() {
       const action = String(button.dataset.action || "");
       const context = getFilteredHoursContext();
 
-      if (["save-employee-hours-pdf", "preview-employee-hours-pdf", "export-employee-hours-csv"].includes(action)) {
+      if (["save-employee-hours-pdf", "preview-employee-hours-pdf", "export-employee-hours-csv", "copy-employee-hours-text", "copy-employee-hours-html"].includes(action)) {
         if (!context.month) {
           billingStatus.textContent = "Bitte zuerst einen Monat auswählen.";
           return;
@@ -1779,6 +1823,30 @@ function wireHoursReport() {
           const csv = buildEmployeeHoursCsv(context.month, context.filteredEntries);
           const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
           downloadBlob(blob, `Mitarbeiter-Stundenauswertung-${context.month}.csv`);
+          return;
+        }
+        if (action === "copy-employee-hours-text") {
+          const text = buildEmployeeSummaryCopyText(context.filteredEntries, hoursEmployeeFilterText);
+          if (!text.trim()) {
+            billingStatus.textContent = "Keine Daten zum Kopieren vorhanden.";
+            return;
+          }
+          copyTextToClipboard(text)
+            .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+            .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+          return;
+        }
+        if (action === "copy-employee-hours-html") {
+          const rows = buildEmployeeSummaryRows(context.filteredEntries, hoursEmployeeFilterText);
+          if (!rows.length) {
+            billingStatus.textContent = "Keine Daten zum Kopieren vorhanden.";
+            return;
+          }
+          const html = buildEmployeeSummaryCopyHtml(context.filteredEntries, hoursEmployeeFilterText);
+          const text = buildEmployeeSummaryCopyText(context.filteredEntries, hoursEmployeeFilterText);
+          copyHtmlToClipboard(html, text)
+            .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+            .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
           return;
         }
       }
@@ -1820,7 +1888,7 @@ function wireHoursReport() {
       if (!button) return;
       const action = String(button.dataset.action || "");
       const context = getFilteredHoursContext();
-      if (["save-customer-hours-pdf", "preview-customer-hours-pdf", "export-customer-hours-csv"].includes(action)) {
+      if (["save-customer-hours-pdf", "preview-customer-hours-pdf", "export-customer-hours-csv", "copy-customer-hours-text", "copy-customer-hours-html"].includes(action)) {
         if (!context.month) {
           billingStatus.textContent = "Bitte zuerst einen Monat auswählen.";
           return;
@@ -1843,6 +1911,18 @@ function wireHoursReport() {
           const csv = buildCustomerHoursCsv(context.month, context.filteredEntries);
           const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
           downloadBlob(blob, `Kunden-Stundenauswertung-${context.month}.csv`);
+          return;
+        }
+        if (action === "copy-customer-hours-text") {
+          copyPanelTableToClipboard(hoursByCustomer, "text")
+            .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+            .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+          return;
+        }
+        if (action === "copy-customer-hours-html") {
+          copyPanelTableToClipboard(hoursByCustomer, "html")
+            .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+            .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
           return;
         }
       }
@@ -1906,6 +1986,19 @@ function wireHoursReport() {
         const csv = buildProductEmployeeReportCsv(context.month, context.filteredEntries);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         downloadBlob(blob, `Produkte-Mitarbeiter-Auswertung-${context.month}.csv`);
+        return;
+      }
+      if (action === "copy-product-employee-report-text") {
+        copyPanelTableToClipboard(hoursByProductsEmployee, "text")
+          .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+        return;
+      }
+      if (action === "copy-product-employee-report-html") {
+        copyPanelTableToClipboard(hoursByProductsEmployee, "html")
+          .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
+        return;
       }
     });
   }
@@ -1943,6 +2036,19 @@ function wireHoursReport() {
         const csv = buildProductCustomerReportCsv(context.month, context.filteredEntries);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         downloadBlob(blob, `Produkte-Kunden-Auswertung-${context.month}.csv`);
+        return;
+      }
+      if (action === "copy-product-customer-report-text") {
+        copyPanelTableToClipboard(hoursByProductsCustomer, "text")
+          .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+        return;
+      }
+      if (action === "copy-product-customer-report-html") {
+        copyPanelTableToClipboard(hoursByProductsCustomer, "html")
+          .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
+        return;
       }
     });
   }
@@ -1975,6 +2081,19 @@ function wireHoursReport() {
         const csv = buildHoursProfitCsv(context.month, context.filteredEntries);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         downloadBlob(blob, `Stunden-Gewinn-Auswertung-${context.month}.csv`);
+        return;
+      }
+      if (action === "copy-hours-profit-report-text") {
+        copyPanelTableToClipboard(hoursByProfit, "text")
+          .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+        return;
+      }
+      if (action === "copy-hours-profit-report-html") {
+        copyPanelTableToClipboard(hoursByProfit, "html")
+          .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
+        return;
       }
     });
   }
@@ -2006,6 +2125,19 @@ function wireHoursReport() {
         const csv = buildProductsProfitCsv(context.month, context.filteredEntries);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         downloadBlob(blob, `Produkte-Gewinn-Auswertung-${context.month}.csv`);
+        return;
+      }
+      if (action === "copy-products-profit-report-text") {
+        copyPanelTableToClipboard(hoursByProductsProfit, "text")
+          .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+        return;
+      }
+      if (action === "copy-products-profit-report-html") {
+        copyPanelTableToClipboard(hoursByProductsProfit, "html")
+          .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
+        return;
       }
     });
   }
@@ -2039,6 +2171,19 @@ function wireHoursReport() {
         const csv = buildVatCsv(month, monthEntries, vatRate);
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         downloadBlob(blob, `Mehrwertsteuer-Auswertung-${month}.csv`);
+        return;
+      }
+      if (action === "copy-vat-report-text") {
+        copyPanelTableToClipboard(hoursByVat, "text")
+          .then(() => { billingStatus.textContent = "Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren in die Zwischenablage fehlgeschlagen."; });
+        return;
+      }
+      if (action === "copy-vat-report-html") {
+        copyPanelTableToClipboard(hoursByVat, "html")
+          .then(() => { billingStatus.textContent = "HTML-Tabelle in die Zwischenablage kopiert."; })
+          .catch(() => { billingStatus.textContent = "Kopieren (HTML) fehlgeschlagen."; });
+        return;
       }
     });
   }
@@ -2104,8 +2249,9 @@ function renderAll() {
   renderCompanyForm();
   renderBillingCustomers();
   renderInvoiceFilterCustomers();
-  renderDefaultMonth();
-  renderDefaultInvoiceFilterMonth();
+  renderDefaultMonth(forcePreviousMonthDefaultsOnInitialRender);
+  renderDefaultInvoiceFilterMonth(forcePreviousMonthDefaultsOnInitialRender);
+  forcePreviousMonthDefaultsOnInitialRender = false;
   renderDefaultHoursMonth();
   renderHoursReport();
   renderInvoiceList();
@@ -2134,6 +2280,7 @@ function renderCompanyForm() {
   companyForm.invoiceText.value = state.company.invoiceText || "";
   if (companyForm.appendixText) companyForm.appendixText.value = state.company.appendixText || "";
   if (companyForm.showSaveButtons) companyForm.showSaveButtons.checked = state.company.showSaveButtons !== false;
+  if (companyForm.mergeSameDayHourlyRows) companyForm.mergeSameDayHourlyRows.checked = Boolean(state.company.mergeSameDayHourlyRows);
   setCompanyLogoPreview(String(state.company.logoDataUrl || "").trim(), state.company.logoDataUrl ? "Gespeichertes Logo." : "Noch kein Logo hochgeladen.");
   refreshCompanyValidationStates();
 }
@@ -2170,19 +2317,31 @@ function renderInvoiceFilterCustomers() {
   }
 }
 
-function renderDefaultMonth() {
-  if (!billingMonth.value) {
-    const now = new Date();
-    now.setMonth(now.getMonth() - 1);
-    billingMonth.value = now.toISOString().slice(0, 7);
+function getPreviousMonthIsoValue() {
+  const now = new Date();
+  const firstDayCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  firstDayCurrentMonth.setMonth(firstDayCurrentMonth.getMonth() - 1);
+  const y = firstDayCurrentMonth.getFullYear();
+  const m = String(firstDayCurrentMonth.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function forcePreviousMonthSelection() {
+  const previousMonth = getPreviousMonthIsoValue();
+  if (billingMonth) billingMonth.value = previousMonth;
+  if (invoiceFilterMonth) invoiceFilterMonth.value = previousMonth;
+  renderInvoiceList();
+}
+
+function renderDefaultMonth(force = false) {
+  if (force || !billingMonth.value) {
+    billingMonth.value = getPreviousMonthIsoValue();
   }
 }
 
-function renderDefaultInvoiceFilterMonth() {
-  if (!invoiceFilterMonth.value) {
-    const now = new Date();
-    now.setMonth(now.getMonth() - 1);
-    invoiceFilterMonth.value = now.toISOString().slice(0, 7);
+function renderDefaultInvoiceFilterMonth(force = false) {
+  if (force || !invoiceFilterMonth.value) {
+    invoiceFilterMonth.value = getPreviousMonthIsoValue();
   }
 }
 
@@ -2319,15 +2478,15 @@ function renderHoursReport() {
     : emptyProductsMessage;
 
   hoursByProductsProfit.innerHTML = productEntries.length
-    ? renderReportActions("preview-products-profit-report-pdf", "save-products-profit-report-pdf", "export-products-profit-report-csv") + renderProductsProfitDetails(productEntries)
+    ? renderReportActions("preview-products-profit-report-pdf", "save-products-profit-report-pdf", "export-products-profit-report-csv", "copy-products-profit-report-text", "copy-products-profit-report-html") + renderProductsProfitDetails(productEntries)
     : emptyProductsMessage;
 
   hoursByProfit.innerHTML = filteredEntries.length
-    ? renderReportActions("preview-hours-profit-report-pdf", "save-hours-profit-report-pdf", "export-hours-profit-report-csv") + renderHoursProfitDetails(filteredEntries)
+    ? renderReportActions("preview-hours-profit-report-pdf", "save-hours-profit-report-pdf", "export-hours-profit-report-csv", "copy-hours-profit-report-text", "copy-hours-profit-report-html") + renderHoursProfitDetails(filteredEntries)
     : emptyHoursMessage;
 
   hoursByVat.innerHTML = monthEntries.length
-    ? renderReportActions("preview-vat-report-pdf", "save-vat-report-pdf", "export-vat-report-csv") + renderVatBreakdown(monthEntries, vatRate)
+    ? renderReportActions("preview-vat-report-pdf", "save-vat-report-pdf", "export-vat-report-csv", "copy-vat-report-text", "copy-vat-report-html") + renderVatBreakdown(monthEntries, vatRate)
     : emptyVatMessage;
 
   hoursByDays.innerHTML = filteredEntries.length
@@ -2388,12 +2547,14 @@ function shouldShowSaveButtons() {
   return state.company?.showSaveButtons !== false;
 }
 
-function renderReportActions(previewAction, saveAction, csvAction) {
+function renderReportActions(previewAction, saveAction, csvAction, copyTextAction = "", copyHtmlAction = "") {
   return `
     <div class="hours-actions">
       <button type="button" data-action="${escapeHtml(previewAction)}">Drucken</button>
       ${shouldShowSaveButtons() ? `<button type="button" data-action="${escapeHtml(saveAction)}">Speichern</button>` : ""}
       <button type="button" data-action="${escapeHtml(csvAction)}">CSV (Excel)</button>
+      ${copyTextAction ? `<button type="button" data-action="${escapeHtml(copyTextAction)}">Kopieren (TXT)</button>` : ""}
+      ${copyHtmlAction ? `<button type="button" data-action="${escapeHtml(copyHtmlAction)}">Kopieren (HTML)</button>` : ""}
     </div>
   `;
 }
@@ -2513,7 +2674,7 @@ function renderHoursCalendarOverview(month, entries) {
     const day = offset + 1;
     const isoDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const dayMap = byDay.get(isoDate) || new Map();
-    const rows = [...dayMap.values()].sort((a, b) => b.amount - a.amount || a.customerName.localeCompare(b.customerName, "de-CH"));
+    const rows = [...dayMap.values()].sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH") || a.employeeName.localeCompare(b.employeeName, "de-CH"));
     const totalHours = rows.reduce((sum, row) => sum + toNumber(row.qty, 0), 0);
     const totalAmount = rows.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
   const totalProfit = rows.reduce((sum, row) => sum + toNumber(row.profit, 0), 0);
@@ -2522,24 +2683,57 @@ function renderHoursCalendarOverview(month, entries) {
     const weekdayShort = shortWeekdays[weekdayIndex] || "";
     const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
 
-    const rowsHtml = rows
-      .map((row) => `
-        <li class="hours-calendar-row hours-money-row">
-          <span class="col-customer">${escapeHtml(row.customerName)}</span>
-          <span class="col-employee">${escapeHtml(row.employeeName)}</span>
-          <strong class="col-hours">${formatNumberCH(row.qty)} h</strong>
-          <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
-          <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
-        </li>
-      `)
-      .join("");
+    const rowsHtml = (() => {
+      if (!rows.length) return "";
+      let html = "";
+      let currentCustomer = "";
+      let customerHours = 0;
+      let customerAmount = 0;
+      const flushCustomerTotal = () => {
+        if (!currentCustomer) return;
+        html += `
+          <li class="hours-calendar-row hours-money-row hours-customer-total">
+            <span class="col-customer">Kundentotal</span>
+            <span class="col-employee"></span>
+            <strong class="col-hours">${formatNumberCH(customerHours)} h</strong>
+            <strong class="col-rate"></strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(customerAmount))}</strong>
+          </li>
+        `;
+      };
+      rows.forEach((row, index) => {
+        const customerChanged = currentCustomer && currentCustomer !== row.customerName;
+        if (customerChanged) {
+          flushCustomerTotal();
+          html += `<li class="hours-customer-divider" aria-hidden="true"></li>`;
+          customerHours = 0;
+          customerAmount = 0;
+        }
+        if (!currentCustomer || currentCustomer !== row.customerName) {
+          currentCustomer = row.customerName;
+        }
+        customerHours += toNumber(row.qty, 0);
+        customerAmount += toNumber(row.amount, 0);
+        html += `
+          <li class="hours-calendar-row hours-money-row">
+            <span class="col-customer">${escapeHtml(row.customerName)}</span>
+            <span class="col-employee">${escapeHtml(row.employeeName)}</span>
+            <strong class="col-hours">${formatNumberCH(row.qty)} h</strong>
+            <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
+          </li>
+        `;
+        if (index === rows.length - 1) flushCustomerTotal();
+      });
+      return html;
+    })();
 
     const detailsHtml = rows.length
       ? `
         <div class="hours-calendar-cell-columns hours-money-columns"><span>Kunde</span><span>Mitarbeiter</span><span>Stunden</span><span>Ansatz</span><span>Total</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total">
-          <span>Total</span>
+        <div class="hours-calendar-total hours-money-total hours-day-total">
+          <span>Tagestotal</span>
           <strong>${formatNumberCH(totalHours)} h</strong>
           <strong>${escapeHtml(formatCurrency(totalAmount))}</strong>
         </div>
@@ -2625,7 +2819,7 @@ function renderProductCalendarOverview(month, entries) {
     const day = offset + 1;
     const isoDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const dayMap = byDay.get(isoDate) || new Map();
-    const rows = [...dayMap.values()].sort((a, b) => b.amount - a.amount || a.customerName.localeCompare(b.customerName, "de-CH"));
+    const rows = [...dayMap.values()].sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH") || a.employeeName.localeCompare(b.employeeName, "de-CH"));
     const totalQty = rows.reduce((sum, row) => sum + toNumber(row.qty, 0), 0);
     const totalAmount = rows.reduce((sum, row) => sum + toNumber(row.amount, 0), 0);
   const totalProfit = rows.reduce((sum, row) => sum + toNumber(row.profit, 0), 0);
@@ -2634,25 +2828,59 @@ function renderProductCalendarOverview(month, entries) {
     const weekdayShort = shortWeekdays[weekdayIndex] || "";
     const isWeekend = weekdayIndex === 0 || weekdayIndex === 6;
 
-    const rowsHtml = rows
-      .map((row) => `
-        <li class="hours-calendar-row hours-money-row products-calendar-row">
-          <span class="col-customer">${escapeHtml(row.customerName)}</span>
-          <span class="col-employee">${escapeHtml(row.employeeName)}</span>
-          <span class="col-product">${escapeHtml(row.productName)}</span>
-          <strong class="col-hours">${formatNumberCH(row.qty)} Stk</strong>
-          <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
-          <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
-        </li>
-      `)
-      .join("");
+    const rowsHtml = (() => {
+      if (!rows.length) return "";
+      let html = "";
+      let currentCustomer = "";
+      let customerQty = 0;
+      let customerAmount = 0;
+      const flushCustomerTotal = () => {
+        if (!currentCustomer) return;
+        html += `
+          <li class="hours-calendar-row hours-money-row products-calendar-row hours-customer-total">
+            <span class="col-customer">Kundentotal</span>
+            <span class="col-employee"></span>
+            <span class="col-product"></span>
+            <strong class="col-hours">${formatNumberCH(customerQty)} Stk</strong>
+            <strong class="col-rate"></strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(customerAmount))}</strong>
+          </li>
+        `;
+      };
+      rows.forEach((row, index) => {
+        const customerChanged = currentCustomer && currentCustomer !== row.customerName;
+        if (customerChanged) {
+          flushCustomerTotal();
+          html += `<li class="hours-customer-divider" aria-hidden="true"></li>`;
+          customerQty = 0;
+          customerAmount = 0;
+        }
+        if (!currentCustomer || currentCustomer !== row.customerName) {
+          currentCustomer = row.customerName;
+        }
+        customerQty += toNumber(row.qty, 0);
+        customerAmount += toNumber(row.amount, 0);
+        html += `
+          <li class="hours-calendar-row hours-money-row products-calendar-row">
+            <span class="col-customer">${escapeHtml(row.customerName)}</span>
+            <span class="col-employee">${escapeHtml(row.employeeName)}</span>
+            <span class="col-product">${escapeHtml(row.productName)}</span>
+            <strong class="col-hours">${formatNumberCH(row.qty)} Stk</strong>
+            <strong class="col-rate">${escapeHtml(formatCurrency(row.unitPrice))}</strong>
+            <strong class="col-total">${escapeHtml(formatCurrency(row.amount))}</strong>
+          </li>
+        `;
+        if (index === rows.length - 1) flushCustomerTotal();
+      });
+      return html;
+    })();
 
     const detailsHtml = rows.length
       ? `
         <div class="hours-calendar-cell-columns hours-money-columns products-calendar-columns"><span>Kunde</span><span>Mitarbeiter</span><span>Produkt</span><span>Stk</span><span>Ansatz</span><span>Total</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total products-calendar-total">
-          <span>Total</span>
+        <div class="hours-calendar-total hours-money-total products-calendar-total hours-day-total">
+          <span>Tagestotal</span>
           <strong>${formatNumberCH(totalQty)} Stk</strong>
           <strong>${escapeHtml(formatCurrency(totalAmount))}</strong>
         </div>
@@ -3020,6 +3248,8 @@ function renderProductsByEmployeeTable(entries, searchTerm = "") {
       <button type="button" data-action="preview-product-employee-report-pdf">Drucken</button>
       ${shouldShowSaveButtons() ? `<button type="button" data-action="save-product-employee-report-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-product-employee-report-csv">CSV (Excel)</button>
+      <button type="button" data-action="copy-product-employee-report-text">Kopieren (TXT)</button>
+      <button type="button" data-action="copy-product-employee-report-html">Kopieren (HTML)</button>
     </div>
     <label>Mitarbeiter suchen
       <input id="hoursProductsEmployeeFilter" type="search" placeholder="Name..." value="${escapeHtml(searchTerm)}" autocomplete="off" />
@@ -3091,6 +3321,8 @@ function renderProductsByCustomerTable(entries, searchTerm = "") {
       <button type="button" data-action="preview-product-customer-report-pdf">Drucken</button>
       ${shouldShowSaveButtons() ? `<button type="button" data-action="save-product-customer-report-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-product-customer-report-csv">CSV (Excel)</button>
+      <button type="button" data-action="copy-product-customer-report-text">Kopieren (TXT)</button>
+      <button type="button" data-action="copy-product-customer-report-html">Kopieren (HTML)</button>
     </div>
     <label>Kunde suchen
       <input id="hoursProductsCustomerFilter" type="search" placeholder="Name..." value="${escapeHtml(searchTerm)}" autocomplete="off" />
@@ -3713,6 +3945,8 @@ function renderCustomerSummaryWithDetails(entries, searchTerm = "") {
       <button type="button" data-action="preview-customer-hours-pdf">Drucken</button>
       ${shouldShowSaveButtons() ? `<button type="button" data-action="save-customer-hours-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-customer-hours-csv">CSV (Excel)</button>
+      <button type="button" data-action="copy-customer-hours-text">Kopieren (TXT)</button>
+      <button type="button" data-action="copy-customer-hours-html">Kopieren (HTML)</button>
     </div>
     <label>Kunde suchen
       <input id="hoursCustomerFilter" type="search" placeholder="Name..." value="${escapeHtml(searchTerm)}" autocomplete="off" />
@@ -3887,7 +4121,7 @@ const details = [...row.details.values()].sort((a, b) => String(a.date).localeCo
   lines.push(["Total Monat", "", "", "", formatNumberCH(totalMonthHours), formatAmountCH(totalMonthAmount)].map(csvEscape).join(";"));
   return "\uFEFF" + lines.join("\r\n");
 }
-function renderEmployeeSummaryTable(entries, searchTerm = "") {
+function buildEmployeeSummaryRows(entries, searchTerm = "") {
   const grouped = new Map();
   entries.forEach((entry) => {
     const employeeId = String(entry.employeeId || "");
@@ -3905,7 +4139,72 @@ function renderEmployeeSummaryTable(entries, searchTerm = "") {
   });
 
   const rows = [...grouped.values()].sort((a, b) => b.qty - a.qty || b.totalWage - a.totalWage);
-  const visibleRows = rows.filter((row) => matchesSearch(row.label, searchTerm));
+  return rows.filter((row) => matchesSearch(row.label, searchTerm));
+}
+
+function buildEmployeeSummaryCopyText(entries, searchTerm = "") {
+  const rows = buildEmployeeSummaryRows(entries, searchTerm);
+  if (!rows.length) return "";
+
+  const columns = [
+    { key: "label", header: "Name" },
+    { key: "count", header: "Erfassungen", format: (v) => String(v) },
+    { key: "qty", header: "Stunden", format: (v) => formatNumberCH(v) },
+    { key: "wage", header: "Vereinbarter Stundenlohn", format: (v) => formatAmountCH(v) },
+    { key: "totalWage", header: "Total Lohn vor Abzügen", format: (v) => formatAmountCH(v) }
+  ];
+
+  const cellRows = rows.map((row) => {
+    return columns.map((col) => {
+      const raw = row[col.key];
+      return String(col.format ? col.format(raw) : (raw ?? ""));
+    });
+  });
+
+  const widths = columns.map((col, idx) => {
+    const maxData = cellRows.reduce((max, r) => Math.max(max, (r[idx] || "").length), 0);
+    return Math.max(col.header.length, maxData);
+  });
+
+  const pad = (value, width, alignRight = false) => {
+    const text = String(value || "");
+    return alignRight ? text.padStart(width, " ") : text.padEnd(width, " ");
+  };
+
+  const isNumericCol = (idx) => idx >= 1;
+  const headerLine = columns.map((col, idx) => pad(col.header, widths[idx], isNumericCol(idx))).join(" | ");
+  const separator = widths.map((w) => "-".repeat(w)).join("-+-");
+  const dataLines = cellRows.map((r) => r.map((cell, idx) => pad(cell, widths[idx], isNumericCol(idx))).join(" | "));
+
+  return [headerLine, separator, ...dataLines].join("\n");
+}
+function buildEmployeeSummaryCopyHtml(entries, searchTerm = "") {
+  const rows = buildEmployeeSummaryRows(entries, searchTerm);
+  if (!rows.length) return "";
+  const head = ["Name", "Erfassungen", "Stunden", "Vereinbarter Stundenlohn", "Total Lohn vor Abzügen"];
+  const bodyRows = rows.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.label)}</td>
+      <td style="text-align:right;">${escapeHtml(String(row.count))}</td>
+      <td style="text-align:right;">${escapeHtml(formatNumberCH(row.qty))}</td>
+      <td style="text-align:right;">${escapeHtml(formatAmountCH(row.wage))}</td>
+      <td style="text-align:right;">${escapeHtml(formatAmountCH(row.totalWage))}</td>
+    </tr>
+  `).join("");
+
+  return `
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">
+  <thead>
+    <tr>
+      ${head.map((h) => `<th style="text-align:left;background:#f3f4f6;">${escapeHtml(h)}</th>`).join("")}
+    </tr>
+  </thead>
+  <tbody>${bodyRows}</tbody>
+</table>
+  `.trim();
+}
+function renderEmployeeSummaryTable(entries, searchTerm = "") {
+  const visibleRows = buildEmployeeSummaryRows(entries, searchTerm);
   const body = visibleRows
     .map(
       (row) => `
@@ -3932,6 +4231,8 @@ function renderEmployeeSummaryTable(entries, searchTerm = "") {
       <button type="button" data-action="preview-employee-hours-pdf">Drucken</button>
       ${shouldShowSaveButtons() ? `<button type="button" data-action="save-employee-hours-pdf">Speichern</button>` : ""}
       <button type="button" data-action="export-employee-hours-csv">CSV (Excel)</button>
+      <button type="button" data-action="copy-employee-hours-text">Kopieren (TXT)</button>
+      <button type="button" data-action="copy-employee-hours-html">Kopieren (HTML)</button>
     </div>
     <label>Mitarbeiter suchen
       <input id="hoursEmployeeFilter" type="search" placeholder="Name..." value="${escapeHtml(searchTerm)}" autocomplete="off" />
@@ -4296,6 +4597,52 @@ function pruneDataOlderThanMonths(months) {
   return { removedInvoices, removedEntries };
 }
 
+function pruneSoftDeletedMasterDataWithoutDependencies() {
+  const customerRefs = new Set();
+  const employeeRefs = new Set();
+  const itemRefs = new Set();
+
+  for (const inv of state.invoices || []) {
+    const customerId = String(inv?.customerId || "").trim();
+    if (customerId) customerRefs.add(customerId);
+  }
+  for (const entry of state.entries || []) {
+    const customerId = String(entry?.customerId || "").trim();
+    const employeeId = String(entry?.employeeId || "").trim();
+    const itemId = String(entry?.itemId || "").trim();
+    if (customerId) customerRefs.add(customerId);
+    if (employeeId) employeeRefs.add(employeeId);
+    if (itemId) itemRefs.add(itemId);
+  }
+
+  const removedCustomers = [];
+  const removedEmployees = [];
+  const removedItems = [];
+
+  state.customers = (state.customers || []).filter((customer) => {
+    const id = String(customer?.id || "").trim();
+    const shouldRemove = Boolean(customer?.deleted) && id && !customerRefs.has(id);
+    if (shouldRemove) removedCustomers.push(customer);
+    return !shouldRemove;
+  });
+
+  state.employees = (state.employees || []).filter((employee) => {
+    const id = String(employee?.id || "").trim();
+    const shouldRemove = Boolean(employee?.deleted) && id && !employeeRefs.has(id);
+    if (shouldRemove) removedEmployees.push(employee);
+    return !shouldRemove;
+  });
+
+  state.items = (state.items || []).filter((item) => {
+    const id = String(item?.id || "").trim();
+    const shouldRemove = Boolean(item?.deleted) && id && !itemRefs.has(id);
+    if (shouldRemove) removedItems.push(item);
+    return !shouldRemove;
+  });
+
+  return { removedCustomers, removedEmployees, removedItems };
+}
+
 function getEntriesOlderThanMonths(months) {
   const safeMonths = Math.min(24, Math.max(1, Math.round(toNumber(months, 12))));
   const now = new Date();
@@ -4409,6 +4756,48 @@ function renderCleanupResult(invoices, entries) {
 
   cleanupResultList.innerHTML = `${invoicesHtml}${entriesHtml}`;
 }
+function mergeInvoiceRowsByDayRateNote(rows) {
+  const grouped = new Map();
+  let passthroughIndex = 0;
+  rows.forEach((row) => {
+    const unitNormalized = String(row.unit || "").trim().toLowerCase();
+    const isHourly = ["h", "std", "stunde", "stunden", "stunde/n", "hour", "hours"].includes(unitNormalized)
+      || unitNormalized.includes("stund");
+
+    if (!isHourly) {
+      grouped.set(`direct__${passthroughIndex++}`, { ...row });
+      return;
+    }
+
+    const key = [
+      String(row.date || ""),
+      String(row.label || ""),
+      String(row.unit || ""),
+      String(toNumber(row.unitPrice, 0).toFixed(4)),
+      String(row.note || "")
+    ].join("|||");
+
+    if (!grouped.has(key)) {
+      grouped.set(key, { ...row });
+      return;
+    }
+
+    const current = grouped.get(key);
+    current.quantity = toNumber(current.quantity, 0) + toNumber(row.quantity, 0);
+    current.total = toNumber(current.quantity, 0) * toNumber(current.unitPrice, 0);
+    grouped.set(key, current);
+  });
+
+  return [...grouped.values()].sort((a, b) => {
+    const byDate = String(a.date || "").localeCompare(String(b.date || ""));
+    if (byDate !== 0) return byDate;
+    const byLabel = String(a.label || "").localeCompare(String(b.label || ""), "de-CH");
+    if (byLabel !== 0) return byLabel;
+    const byRate = toNumber(a.unitPrice, 0) - toNumber(b.unitPrice, 0);
+    if (byRate !== 0) return byRate;
+    return String(a.note || "").localeCompare(String(b.note || ""), "de-CH");
+  });
+}
 function buildInvoice(customerId, month, paymentSlipType = "swiss_qr") {
   const customer = state.customers.find((c) => c.id === customerId);
   if (!customer) return null;
@@ -4416,7 +4805,7 @@ function buildInvoice(customerId, month, paymentSlipType = "swiss_qr") {
   const monthEntries = state.entries.filter((e) => e.customerId === customerId && String(e.date || "").startsWith(month));
   if (!monthEntries.length) return null;
 
-  const rows = monthEntries
+  const baseRows = monthEntries
     .slice()
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .map((e) => {
@@ -4436,6 +4825,10 @@ function buildInvoice(customerId, month, paymentSlipType = "swiss_qr") {
         note: e.note || ""
       };
     });
+
+  const rows = state.company?.mergeSameDayHourlyRows
+    ? mergeInvoiceRowsByDayRateNote(baseRows)
+    : baseRows;
 
   const subtotal = rows.reduce((acc, r) => acc + r.total, 0);
   const vatRate = toNumber(state.company.vatRate, 0);
@@ -5538,6 +5931,169 @@ function isValidIban(ibanRaw) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function copyTextToClipboard(text) {
+  const value = String(text || "");
+  if (navigator?.clipboard?.writeText) {
+    return navigator.clipboard.writeText(value);
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "readonly");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      if (!ok) {
+        reject(new Error("copy_failed"));
+        return;
+      }
+      resolve();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+
+
+
+
+
+function copyHtmlToClipboard(html, textFallback) {
+  const htmlValue = String(html || "");
+  const textValue = String(textFallback || "");
+  if (window.ClipboardItem && navigator?.clipboard?.write) {
+    const item = new ClipboardItem({
+      "text/html": new Blob([htmlValue], { type: "text/html" }),
+      "text/plain": new Blob([textValue], { type: "text/plain" })
+    });
+    return navigator.clipboard.write([item]);
+  }
+  return copyTextToClipboard(textValue || htmlValue.replace(/<[^>]+>/g, " "));
+}
+
+function normalizeCopyCellText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function getTableCopyModel(panelEl) {
+  const table = panelEl?.querySelector("table.hours-table");
+  if (!table) return null;
+
+  const headerCells = [...table.querySelectorAll("thead th")];
+  if (!headerCells.length) return null;
+
+  const headerTexts = headerCells.map((th) => normalizeCopyCellText(th.textContent));
+  const bodyRowsRaw = [...table.querySelectorAll("tbody tr")]
+    .map((tr) => [...tr.querySelectorAll("td,th")])
+    .filter((cells) => cells.length > 1);
+
+  const excludeIndexes = new Set();
+  headerTexts.forEach((header, idx) => {
+    const headerNorm = String(header || "").toLowerCase();
+    const hasActions = bodyRowsRaw.some((cells) => {
+      const cell = cells[idx];
+      return cell ? Boolean(cell.querySelector("button, [data-action], a[role='button'], .btn")) || cell.classList.contains("hours-action-cell") : false;
+    });
+    if (hasActions || ["abrechnung", "aktion", "aktionen"].includes(headerNorm)) {
+      excludeIndexes.add(idx);
+    }
+  });
+
+  const includeIndexes = headerTexts
+    .map((_, idx) => idx)
+    .filter((idx) => !excludeIndexes.has(idx));
+
+  const headers = includeIndexes.map((idx) => headerTexts[idx]);
+  const rows = bodyRowsRaw
+    .map((cells) => includeIndexes.map((idx) => normalizeCopyCellText(cells[idx]?.textContent || "")))
+    .filter((row) => row.some((cell) => cell.length > 0));
+
+  if (!headers.length || !rows.length) return null;
+  return { headers, rows };
+}
+
+function buildTextFromTableCopyModel(model) {
+  if (!model || !Array.isArray(model.headers) || !Array.isArray(model.rows)) return "";
+  const widths = model.headers.map((header, idx) => {
+    const maxData = model.rows.reduce((max, row) => Math.max(max, String(row[idx] || "").length), 0);
+    return Math.max(String(header || "").length, maxData);
+  });
+  const pad = (value, width, alignRight = false) => {
+    const text = String(value || "");
+    return alignRight ? text.padStart(width, " ") : text.padEnd(width, " ");
+  };
+  const isNumeric = (value) => /^[-+]?\d[\d'.,\s]*$/.test(String(value || "").trim());
+  const rightAligned = model.headers.map((_, idx) => model.rows.every((row) => isNumeric(row[idx])));
+
+  const headerLine = model.headers.map((h, idx) => pad(h, widths[idx], rightAligned[idx])).join(" | ");
+  const separator = widths.map((w) => "-".repeat(w)).join("-+-");
+  const dataLines = model.rows.map((row) => row.map((cell, idx) => pad(cell, widths[idx], rightAligned[idx])).join(" | "));
+
+  return [headerLine, separator, ...dataLines].join("\n");
+}
+
+function buildHtmlFromTableCopyModel(model) {
+  if (!model || !Array.isArray(model.headers) || !Array.isArray(model.rows)) return "";
+  const headHtml = model.headers
+    .map((h) => `<th style="text-align:left;background:#f3f4f6;">${escapeHtml(h)}</th>`)
+    .join("");
+  const bodyHtml = model.rows
+    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+    .join("");
+
+  return `
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;">
+  <thead><tr>${headHtml}</tr></thead>
+  <tbody>${bodyHtml}</tbody>
+</table>
+  `.trim();
+}
+
+function copyPanelTableToClipboard(panelEl, mode = "text") {
+  const model = getTableCopyModel(panelEl);
+  if (!model) return Promise.reject(new Error("no_table_data"));
+  const text = buildTextFromTableCopyModel(model);
+  if (!text.trim()) return Promise.reject(new Error("no_table_data"));
+  if (String(mode || "text").toLowerCase() === "html") {
+    const html = buildHtmlFromTableCopyModel(model);
+    return copyHtmlToClipboard(html, text);
+  }
+  return copyTextToClipboard(text);
+}
 
 
 

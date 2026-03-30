@@ -236,6 +236,11 @@
             Speichern-Buttons unter Rechnungen und Auswertungen anzeigen
           </label>
 
+          <label class="full-width reset-confirm-label">
+            <input name="mergeSameDayHourlyRows" type="checkbox" />
+            Rechnungspositionen pro Tag zusammenfassen (gleiches Datum, gleicher Stundensatz, gleiche Notiz)
+          </label>
+
           <button type="submit" class="primary company-save-btn">Firmendaten speichern</button>
         </form>
         <p id="companyStatus" class="status"></p>
@@ -312,7 +317,7 @@
             <input id="backupImportFile" type="file" accept=".json,application/json" required />
           </label>
           <div class="actions">
-            <button id="backupImportBtn" class="primary" type="button" disabled>Backup importieren</button>
+            <button id="backupImportBtn" class="primary" type="button" disabled onclick="window.__handleBackupImportClick && window.__handleBackupImportClick()">Backup importieren</button>
           </div>
         </section>
 
@@ -344,11 +349,12 @@
               <option value="22">22 Monate</option>
               <option value="23">23 Monate</option>
               <option value="24">24 Monate</option>
+              <option value="all">Alle</option>
             </select>
           </label>
           <label class="reset-confirm-label">
             <input id="invoiceCleanupConfirmCheckbox" type="checkbox" required />
-            Ich bestätige, dass die markierten Erfassungen/Rechnungen älter als <strong id="invoiceCleanupConfirmValue">12 Monate</strong> gelöscht werden.
+            Ich bestätige, dass die markierten Erfassungen/Rechnungen <strong id="invoiceCleanupConfirmValue">12 Monate</strong> gelöscht werden.
           </label>
           <div class="actions">
             <button id="invoiceCleanupBtn" type="button" class="danger" disabled onclick="window.__handleInvoiceCleanupClick && window.__handleInvoiceCleanupClick()">Alte Erfassungen/Rechnungen löschen</button>
@@ -462,6 +468,10 @@
   <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
 
 
 
