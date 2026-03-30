@@ -2347,7 +2347,7 @@ function renderDefaultInvoiceFilterMonth(force = false) {
 
 function renderDefaultHoursMonth() {
   if (hoursMonth && !hoursMonth.value) {
-    hoursMonth.value = new Date().toISOString().slice(0, 7);
+    hoursMonth.value = getPreviousMonthIsoValue();
   }
 }
 
@@ -6094,6 +6094,8 @@ function copyPanelTableToClipboard(panelEl, mode = "text") {
   }
   return copyTextToClipboard(text);
 }
+
+
 
 
 

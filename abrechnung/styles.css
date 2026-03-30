@@ -1829,3 +1829,32 @@ button:disabled {
   border-bottom: 3px double #9ca3af;
   padding-bottom: 0.28rem;
 }
+
+/* Kundentotal und Tagestotal bewusst gleich gross darstellen */
+.hours-customer-total,
+.hours-day-total {
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2;
+}
+
+.hours-customer-total span,
+.hours-customer-total strong,
+.hours-day-total span,
+.hours-day-total strong {
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2;
+}
+
+
+
+/* Datenzeilen normal, nur Totals fett */
+.hours-calendar-row.hours-money-row:not(.hours-customer-total) strong {
+  font-weight: 400;
+}
+
+/* Produkte-Kalender: gleiche Logik wie Stunden-Kalender */
+.hours-calendar-row.hours-money-row.products-calendar-row:not(.hours-customer-total) strong {
+  font-weight: 400;
+}
