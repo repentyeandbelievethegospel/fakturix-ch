@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="de-CH">
 <head>
   <meta charset="UTF-8" />
@@ -96,8 +96,11 @@
 
             <section id="auswertung" class="panel" role="tabpanel" hidden>
       <nav class="tabs tabs-sub" role="tablist" aria-label="Auswertung Untermenü">
-        <button class="subtab active" data-subtab="auswertung-stunden" role="tab" aria-selected="true">Stunden</button>
-        <button class="subtab" data-subtab="auswertung-produkte" role="tab" aria-selected="false">Produkte</button>
+        <button class="subtab active" data-subtab="auswertung-stunden" role="tab" aria-selected="true">Kalender Kunden</button>
+        <button class="subtab" data-subtab="auswertung-stunden-mitarbeiter" role="tab" aria-selected="false">Kalender Mitarbeiter</button>
+        <button class="subtab" data-subtab="auswertung-produkte" role="tab" aria-selected="false">Produkte Kunden</button>
+        <button class="subtab" data-subtab="auswertung-stunden-summen" role="tab" aria-selected="false">Stunden Summen</button>
+        <button class="subtab" data-subtab="auswertung-stunden-detail" role="tab" aria-selected="false">Stunden Detail</button>
       </nav>
 
       <h2>Auswertung</h2>
@@ -113,17 +116,34 @@
         </section>
       </section>
 
+
+      <section id="auswertung-stunden-mitarbeiter" class="subpanel" role="tabpanel" hidden>
+        <section class="subsection">
+          <div id="reportCalendarEmployees" class="report-calendar-wrap"></div>
+        </section>
+      </section>
       <section id="auswertung-produkte" class="subpanel" role="tabpanel" hidden>
         <section class="subsection">
           <div id="reportCalendarProducts" class="report-calendar-wrap"></div>
         </section>
       </section>
+      <section id="auswertung-stunden-summen" class="subpanel" role="tabpanel" hidden>
+        <section class="subsection">
+          <div id="reportHourSums" class="report-calendar-wrap"></div>
+        </section>
+      </section>
+      <section id="auswertung-stunden-detail" class="subpanel" role="tabpanel" hidden>
+        <section class="subsection">
+          <div id="reportHourDetails" class="report-calendar-wrap"></div>
+        </section>
+      </section>
+
     </section>
     <section id="stammdaten" class="panel" role="tabpanel" hidden>
       <nav class="tabs tabs-sub" role="tablist" aria-label="Stammdaten">
         <button class="subtab active" data-subtab="stamm-kunden" role="tab" aria-selected="true">Kunden</button>
         <button class="subtab" data-subtab="stamm-mitarbeiter" role="tab" aria-selected="false">Mitarbeiter</button>
-        <button class="subtab" data-subtab="stamm-produkte" role="tab" aria-selected="false">Produkte</button>        <button class="subtab" data-subtab="stamm-produkttypen" role="tab" aria-selected="false">Produkttypen</button>
+        <button class="subtab" data-subtab="stamm-produkte" role="tab" aria-selected="false">Produkte Kunden</button>        <button class="subtab" data-subtab="stamm-produkttypen" role="tab" aria-selected="false">Produkttypen</button>
       </nav>
 
       <section id="stamm-kunden" class="subpanel active" role="tabpanel">
@@ -222,7 +242,7 @@
       </section>
 
       <section id="stamm-produkte" class="subpanel" role="tabpanel" hidden>
-        <h2>Produkte</h2>
+        <h2>Produkte Kunden</h2>
         <section class="subsection">
           <h3>Produkt erfassen</h3>
           <form id="itemForm" class="form-grid">
@@ -426,6 +446,15 @@
   <script src="app.js?v=20260320-3"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
 
 
 
