@@ -392,8 +392,10 @@ async function exportDesktopBackup() {
     exportedAt: new Date().toISOString(),
     data: state
   };
-  const dateTag = new Date().toISOString().slice(0, 10);
-  const fileName = `fakturix-ch-abrechnung-backup-${dateTag}.json`;
+  const now = new Date();
+  const dateTag = now.toISOString().slice(0, 10);
+  const timeTag = `${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+  const fileName = `fakturix-ch-abrechnung-backup-${dateTag}-${timeTag}.json`;
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const saveResult = await saveBlobWithDialog(blob, fileName);
   if (saveResult === "unsupported" || saveResult === "error") {
@@ -6094,6 +6096,8 @@ function copyPanelTableToClipboard(panelEl, mode = "text") {
   }
   return copyTextToClipboard(text);
 }
+
+
 
 
 
