@@ -104,6 +104,9 @@ const reportCalendar = document.getElementById("reportCalendar");
 const reportCalendarProducts = document.getElementById("reportCalendarProducts");
 const reportCalendarEmployees = document.getElementById("reportCalendarEmployees");
 const reportHourSums = document.getElementById("reportHourSums");
+const reportProductSums = document.getElementById("reportProductSums");
+const reportProductDetails = document.getElementById("reportProductDetails");
+const reportCustomerDetails = document.getElementById("reportCustomerDetails");
 const reportHourDetails = document.getElementById("reportHourDetails");
 const entryQuantityInput = entryForm.querySelector('input[name="quantity"]');
 const itemTypeSelect = document.getElementById("itemType");
@@ -302,6 +305,9 @@ function wireTabs() {
         renderEmployeeReportOverview();
         renderProductReportOverview();
         renderHourSumsOverview();
+        renderProductSumsOverview();
+        renderProductDetailsOverview();
+        renderCustomerDetailsOverview();
         renderHourDetailsOverview();
       }
     });
@@ -1483,6 +1489,7 @@ function editEntry(entryId) {
   if (entryCancelBtn) entryCancelBtn.hidden = false;
   updateEntryQuantityConstraints();
   refreshRequiredFieldStates();
+  entryForm.quantity?.scrollIntoView({ behavior: "smooth", block: "center" });
   entryForm.quantity?.focus();
   entryForm.quantity?.select();
 }
@@ -1568,8 +1575,8 @@ function resetEntryForm() {
   syncEntryEmployeeAssignmentMode({ resetSelection: false });
   updateEntryQuantityConstraints();
   refreshRequiredFieldStates();
-  entryForm.quantity?.focus();
-  entryForm.quantity?.select();
+  entryCustomerSearch?.focus();
+  entryCustomerSearch?.select();
 }
 
 function normalizeImport(parsed) {
@@ -1700,6 +1707,9 @@ function renderAll() {
   renderEmployeeReportOverview();
   renderProductReportOverview();
   renderHourSumsOverview();
+  renderProductSumsOverview();
+  renderProductDetailsOverview();
+  renderCustomerDetailsOverview();
   renderHourDetailsOverview();
   renderSettings();
   renderExportCleanupPreview();
@@ -2812,6 +2822,9 @@ function wireReportOverview() {
     renderEmployeeReportOverview();
     renderProductReportOverview();
     renderHourSumsOverview();
+    renderProductSumsOverview();
+    renderProductDetailsOverview();
+    renderCustomerDetailsOverview();
     renderHourDetailsOverview();
   };
   reportMonth.addEventListener("change", rerender);
@@ -2918,7 +2931,7 @@ function renderReportOverview() {
           <li class="hours-calendar-row hours-money-row hours-customer-total">
             <span class="col-customer">Kundentotal</span>
             <span class="col-employee"></span>
-            <strong class="col-hours">${escapeHtml(formatNumberCH(customerHours, 0, 2))}</strong>
+            <strong class="col-hours">${escapeHtml(formatNumberCH(customerHours, 2, 2))}</strong>
             <strong class="col-rate"></strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(customerAmount))}</strong>
           </li>
@@ -2941,7 +2954,7 @@ function renderReportOverview() {
           <li class="hours-calendar-row hours-money-row">
             <span class="col-customer">${escapeHtml(row.customerName)}</span>
             <span class="col-employee">${escapeHtml(row.employeeName)}</span>
-            <strong class="col-hours">${escapeHtml(formatNumberCH(row.qty, 0, 2))}</strong>
+            <strong class="col-hours">${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
             <strong class="col-rate">${escapeHtml(formatNumberCH(row.unitPrice))}</strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(row.amount))}</strong>
           </li>
@@ -2959,7 +2972,7 @@ function renderReportOverview() {
         <ul class="hours-calendar-list">${rowsHtml}</ul>
         <div class="hours-calendar-total hours-money-total hours-day-total">
           <span>Tagestotal</span>
-          <strong>${escapeHtml(formatNumberCH(totalHours, 0, 2))}</strong>
+          <strong>${escapeHtml(formatNumberCH(totalHours, 2, 2))}</strong>
           <strong>${escapeHtml(formatNumberCH(totalAmount))}</strong>
         </div>
       `
@@ -3075,7 +3088,7 @@ function renderEmployeeReportOverview() {
           <li class="hours-calendar-row hours-money-row hours-customer-total">
             <span class="col-customer">Mitarbeitertotal</span>
             <span class="col-employee"></span>
-            <strong class="col-hours">${escapeHtml(formatNumberCH(employeeHours, 0, 2))}</strong>
+            <strong class="col-hours">${escapeHtml(formatNumberCH(employeeHours, 2, 2))}</strong>
             <strong class="col-rate"></strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(employeeAmount))}</strong>
           </li>
@@ -3098,7 +3111,7 @@ function renderEmployeeReportOverview() {
           <li class="hours-calendar-row hours-money-row">
             <span class="col-customer">${escapeHtml(row.employeeName)}</span>
             <span class="col-employee">${escapeHtml(row.customerName)}</span>
-            <strong class="col-hours">${escapeHtml(formatNumberCH(row.qty, 0, 2))}</strong>
+            <strong class="col-hours">${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
             <strong class="col-rate">${escapeHtml(formatNumberCH(row.unitPrice))}</strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(row.amount))}</strong>
           </li>
@@ -3114,7 +3127,7 @@ function renderEmployeeReportOverview() {
         <ul class="hours-calendar-list">${rowsHtml}</ul>
         <div class="hours-calendar-total hours-money-total hours-day-total">
           <span>Tagestotal</span>
-          <strong>${escapeHtml(formatNumberCH(totalHours, 0, 2))}</strong>
+          <strong>${escapeHtml(formatNumberCH(totalHours, 2, 2))}</strong>
           <strong>${escapeHtml(formatNumberCH(totalAmount))}</strong>
         </div>
       `
@@ -3219,13 +3232,13 @@ function renderHourSumsOverview() {
         </thead>
         <tbody>
           ${rows.map((row) => `<tr><td>${escapeHtml(row.name)}</td><td style="text-align:right;">${escapeHtml(formatHours(row.hours))}</td></tr>`).join("")}
-          <tr><td style="font-weight:bold;">Total</td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(total, 0, 2))}</td></tr>
+          <tr><td style="font-weight:bold;">Total</td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(total, 2, 2))}</td></tr>
         </tbody>
       </table>
     `;
 
     const textRows = rows.map((row) => `${row.name}\t${formatHours(row.hours)}`).join("\n");
-    const text = `${title} ${formatMonthCH(month)}\n${label}\tStunden\n${textRows}\nTotal\t${formatNumberCH(total, 0, 2)}`;
+    const text = `${title} ${formatMonthCH(month)}\n${label}\tStunden\n${textRows}\nTotal\t${formatNumberCH(total, 2, 2)}`;
     return { html, text };
   };
 
@@ -3241,7 +3254,7 @@ function renderHourSumsOverview() {
         </div>
         <div class="hours-sum-head"><span>Mitarbeiter</span><span>Stunden</span></div>
         <div class="hours-sum-body">${renderRows(employeeRows)}</div>
-        <div class="hours-sum-total"><span>Total</span><strong>${escapeHtml(formatNumberCH(employeeTotal, 0, 2))}</strong></div>
+        <div class="hours-sum-total"><span>Total</span><strong>${escapeHtml(formatNumberCH(employeeTotal, 2, 2))}</strong></div>
         <div class="hours-sum-actions"><button type="button" class="secondary hours-sum-copy-btn" data-copy-key="sum-employee">Kopieren</button></div>
       </section>
       <section class="hours-sum-card">
@@ -3250,10 +3263,303 @@ function renderHourSumsOverview() {
         </div>
         <div class="hours-sum-head"><span>Kunde</span><span>Stunden</span></div>
         <div class="hours-sum-body">${renderRows(customerRows)}</div>
-        <div class="hours-sum-total"><span>Total</span><strong>${escapeHtml(formatNumberCH(customerTotal, 0, 2))}</strong></div>
+        <div class="hours-sum-total"><span>Total</span><strong>${escapeHtml(formatNumberCH(customerTotal, 2, 2))}</strong></div>
         <div class="hours-sum-actions"><button type="button" class="secondary hours-sum-copy-btn" data-copy-key="sum-customer">Kopieren</button></div>
       </section>
     </div>
+  `;
+}
+function renderProductSumsOverview() {
+  if (!reportProductSums || !reportMonth) return;
+  const month = String(reportMonth.value || "").trim();
+
+  if (!month) {
+    reportProductSums.innerHTML = "<small>Bitte Monat wählen.</small>";
+    return;
+  }
+
+  const monthEntries = state.entries.filter((entry) => String(entry?.date || "").startsWith(`${month}-`));
+  const byProduct = new Map();
+  const byCustomer = new Map();
+
+  const getCustomerShort = (customer) => {
+    if (!customer) return "Unbekannter Kunde";
+    const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+    if (customer.company && name) return `${customer.company} - ${name}`;
+    return customer.company || name || "Unbekannter Kunde";
+  };
+
+  monthEntries.forEach((entry) => {
+    const item = state.items.find((i) => i.id === entry.itemId);
+    const unit = String(getItemUnitName(item) || "").trim().toLowerCase();
+    if (!["stk", "stück", "stueck", "stuecke", "stücke"].includes(unit)) return;
+
+    const qty = Number(entry.quantity) || 0;
+    if (qty <= 0) return;
+
+    const customer = state.customers.find((cst) => cst.id === String(entry.customerId || ""));
+    const customerName = getCustomerShort(customer);
+    const itemName = String(item?.name || "Unbekanntes Produkt");
+
+    byProduct.set(itemName, (byProduct.get(itemName) || 0) + qty);
+    byCustomer.set(customerName, (byCustomer.get(customerName) || 0) + qty);
+  });
+
+  const productRows = [...byProduct.entries()]
+    .map(([name, qty]) => ({ name, qty }))
+    .sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
+
+  const customerRows = [...byCustomer.entries()]
+    .map(([name, qty]) => ({ name, qty }))
+    .sort((a, b) => a.name.localeCompare(b.name, "de-CH"));
+
+  const productTotal = productRows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+  const customerTotal = customerRows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+
+  const renderRows = (rows) => rows.length
+    ? rows.map((row) => `
+      <div class="hours-sum-row">
+        <span class="label">${escapeHtml(row.name)}</span>
+        <strong class="value">${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
+      </div>
+    `).join("")
+    : `<div class="hours-sum-empty">Keine Produkte-Erfassungen</div>`;
+
+  reportProductSums.innerHTML = `
+    <h3>Produkte Summen ${escapeHtml(formatMonthCH(month))}</h3>
+    <div class="hours-sum-grid">
+      <section class="hours-sum-card">
+        <div class="hours-sum-title-row">
+          <h4>Nach Produkt</h4>
+        </div>
+        <div class="hours-sum-head"><span>Produkt</span><span>Menge</span></div>
+        <div class="hours-sum-body">${renderRows(productRows)}</div>
+        <div class="hours-sum-total"><span>Total</span><strong>${escapeHtml(formatNumberCH(productTotal, 2, 2))}</strong></div>
+      </section>
+      <section class="hours-sum-card">
+        <div class="hours-sum-title-row">
+          <h4>Nach Kunde</h4>
+        </div>
+        <div class="hours-sum-head"><span>Kunde</span><span>Menge</span></div>
+        <div class="hours-sum-body">${renderRows(customerRows)}</div>
+        <div class="hours-sum-total"><span>Total</span><strong>${escapeHtml(formatNumberCH(customerTotal, 2, 2))}</strong></div>
+      </section>
+    </div>
+  `;
+}
+function renderProductDetailsOverview() {
+  if (!reportProductDetails || !reportMonth) return;
+  const month = String(reportMonth.value || "").trim();
+
+  if (!month) {
+    reportProductDetails.innerHTML = "<small>Bitte Monat wählen.</small>";
+    return;
+  }
+
+  const shortWeekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const byProduct = new Map();
+  const monthEntries = state.entries.filter((entry) => String(entry?.date || "").startsWith(`${month}-`));
+
+  const getCustomerShort = (customer) => {
+    if (!customer) return "Unbekannter Kunde";
+    const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+    if (customer.company && name) return `${customer.company} - ${name}`;
+    return customer.company || name || "Unbekannter Kunde";
+  };
+
+  const getEmployeeShort = (employee) => {
+    if (!employee) return "Nicht zugewiesen";
+    const name = `${employee.firstName || ""} ${employee.lastName || ""}`.trim();
+    return name || "Nicht zugewiesen";
+  };
+
+  monthEntries.forEach((entry) => {
+    const item = state.items.find((i) => i.id === entry.itemId);
+    const unit = String(getItemUnitName(item) || "").trim().toLowerCase();
+    if (!["stk", "stück", "stueck", "stuecke", "stücke"].includes(unit)) return;
+
+    const qty = Number(entry.quantity) || 0;
+    if (qty <= 0) return;
+
+    const customer = state.customers.find((c) => c.id === String(entry.customerId || ""));
+    const employee = state.employees.find((e) => e.id === String(entry.employeeId || ""));
+    const customerName = getCustomerShort(customer);
+    const employeeName = getEmployeeShort(employee);
+    const itemName = String(item?.name || "Unbekanntes Produkt");
+    const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
+    const total = qty * unitPrice;
+
+    const dateValue = String(entry?.date || "").slice(0, 10);
+    const parsed = new Date(dateValue);
+    const weekdayShort = Number.isNaN(parsed.getTime()) ? "" : (shortWeekdays[parsed.getDay()] || "");
+
+    const productId = String(item?.id || `item-${itemName}`);
+    const group = byProduct.get(productId) || { itemName, rows: [] };
+    group.rows.push({
+      weekdayShort,
+      dateValue,
+      customerName,
+      employeeName,
+      qty,
+      unitPrice,
+      total
+    });
+    byProduct.set(productId, group);
+  });
+
+  const productCards = [...byProduct.values()]
+    .map((group) => {
+      const sortedRows = group.rows.slice().sort((a, b) => String(a.dateValue).localeCompare(String(b.dateValue), "de-CH") || a.customerName.localeCompare(b.customerName, "de-CH"));
+      const monthQtyTotal = sortedRows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+      const monthAmountTotal = sortedRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+
+      const rowsHtml = sortedRows.map((row) => `
+        <div class="hours-detail-row">
+          <span>${escapeHtml(row.weekdayShort)}</span>
+          <span>${escapeHtml(formatDateCH(row.dateValue))}</span>
+          <span>${escapeHtml(row.customerName)}</span>
+          <span>${escapeHtml(row.employeeName)}</span>
+          <strong>${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
+          <strong>${escapeHtml(formatNumberCH(row.unitPrice, 2, 2))}</strong>
+          <strong>${escapeHtml(formatNumberCH(row.total, 2, 2))}</strong>
+        </div>
+      `).join("");
+
+      return `
+        <section class="hours-detail-card">
+          <div class="hours-detail-title-row">
+            <h4>${escapeHtml(group.itemName)}</h4>
+          </div>
+          <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Kunde</span><span>Mitarbeiter</span><span>Menge</span><span>Ansatz</span><span>Total (CHF)</span></div>
+          <div class="hours-detail-body">${rowsHtml}</div>
+          <div class="hours-detail-total"><span>Monatstotal</span><strong>${escapeHtml(formatNumberCH(monthQtyTotal, 2, 2))}</strong><strong>${escapeHtml(formatNumberCH(monthAmountTotal, 2, 2))}</strong></div>
+        </section>
+      `;
+    })
+    .sort((a, b) => a.localeCompare(b, "de-CH"));
+
+  const emptyCard = `
+    <section class="hours-detail-card">
+      <div class="hours-detail-title-row">
+        <h4>Keine Erfassung</h4>
+      </div>
+      <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Kunde</span><span>Mitarbeiter</span><span>Menge</span><span>Ansatz</span><span>Total (CHF)</span></div>
+      <div class="hours-detail-body">
+        <div class="hours-detail-row"><span>-</span><span>-</span><span>Keine Produkte-Erfassungen</span><span>-</span><strong>-</strong><strong>-</strong><strong>-</strong></div>
+      </div>
+      <div class="hours-detail-total"><span>Monatstotal</span><strong>0</strong><strong>0</strong></div>
+    </section>
+  `;
+
+  reportProductDetails.innerHTML = `
+    <h3>Produkte Details ${escapeHtml(formatMonthCH(month))}</h3>
+    <div class="hours-detail-grid">${productCards.length ? productCards.join("") : emptyCard}</div>
+  `;
+}
+function renderCustomerDetailsOverview() {
+  if (!reportCustomerDetails || !reportMonth) return;
+  const month = String(reportMonth.value || "").trim();
+
+  if (!month) {
+    reportCustomerDetails.innerHTML = "<small>Bitte Monat wählen.</small>";
+    return;
+  }
+
+  const shortWeekdays = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  const byCustomer = new Map();
+  const monthEntries = state.entries.filter((entry) => String(entry?.date || "").startsWith(`${month}-`));
+
+  const getCustomerShort = (customer) => {
+    if (!customer) return "Unbekannter Kunde";
+    const name = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+    if (customer.company && name) return `${customer.company} - ${name}`;
+    return customer.company || name || "Unbekannter Kunde";
+  };
+
+  const getEmployeeShort = (employee) => {
+    if (!employee) return "Nicht zugewiesen";
+    const name = `${employee.firstName || ""} ${employee.lastName || ""}`.trim();
+    return name || "Nicht zugewiesen";
+  };
+
+  monthEntries.forEach((entry) => {
+    const item = state.items.find((i) => i.id === entry.itemId);
+    const customer = state.customers.find((c) => c.id === String(entry.customerId || ""));
+    const employee = state.employees.find((e) => e.id === String(entry.employeeId || ""));
+
+    const customerId = String(customer?.id || `unassigned-${getCustomerShort(customer)}`);
+    const customerName = getCustomerShort(customer);
+    const employeeName = getEmployeeShort(employee);
+    const itemName = String(item?.name || "Unbekannt");
+    const unitName = getItemUnitName(item) || "-";
+    const qty = Number(entry.quantity) || 0;
+    const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
+    const total = qty * unitPrice;
+
+    const dateValue = String(entry?.date || "").slice(0, 10);
+    const parsed = new Date(dateValue);
+    const weekdayShort = Number.isNaN(parsed.getTime()) ? "" : (shortWeekdays[parsed.getDay()] || "");
+
+    const group = byCustomer.get(customerId) || { customerName, rows: [] };
+    group.rows.push({
+      weekdayShort,
+      dateValue,
+      employeeName,
+      itemName,
+      qty,
+      unitName,
+      total
+    });
+    byCustomer.set(customerId, group);
+  });
+
+  const customerCards = [...byCustomer.values()]
+    .sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH"))
+    .map((group) => {
+      const sortedRows = group.rows.slice().sort((a, b) => String(a.dateValue).localeCompare(String(b.dateValue), "de-CH") || a.itemName.localeCompare(b.itemName, "de-CH"));
+      const monthAmountTotal = sortedRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+      const countTotal = sortedRows.length;
+
+      const rowsHtml = sortedRows.map((row) => `
+        <div class="hours-detail-row">
+          <span>${escapeHtml(row.weekdayShort)}</span>
+          <span>${escapeHtml(formatDateCH(row.dateValue))}</span>
+          <span>${escapeHtml(row.employeeName)}</span>
+          <span>${escapeHtml(row.itemName)}</span>
+          <strong>${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
+          <strong>${escapeHtml(String(row.unitName))}</strong>
+          <strong>${escapeHtml(formatNumberCH(row.total, 2, 2))}</strong>
+        </div>
+      `).join("");
+
+      return `
+        <section class="hours-detail-card">
+          <div class="hours-detail-title-row">
+            <h4>${escapeHtml(group.customerName)}</h4>
+          </div>
+          <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Mitarbeiter</span><span>Leistung</span><span>Menge</span><span>Einheit</span><span>Total (CHF)</span></div>
+          <div class="hours-detail-body">${rowsHtml}</div>
+          <div class="hours-detail-total"><span>Monatstotal</span><strong>${escapeHtml(String(countTotal))}</strong><strong>${escapeHtml(formatNumberCH(monthAmountTotal, 2, 2))}</strong></div>
+        </section>
+      `;
+    });
+
+  const emptyCard = `
+    <section class="hours-detail-card">
+      <div class="hours-detail-title-row">
+        <h4>Keine Erfassung</h4>
+      </div>
+      <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Mitarbeiter</span><span>Leistung</span><span>Menge</span><span>Einheit</span><span>Total (CHF)</span></div>
+      <div class="hours-detail-body">
+        <div class="hours-detail-row"><span>-</span><span>-</span><span>-</span><span>Keine Erfassungen</span><strong>-</strong><strong>-</strong><strong>-</strong></div>
+      </div>
+      <div class="hours-detail-total"><span>Monatstotal</span><strong>0</strong><strong>0</strong></div>
+    </section>
+  `;
+
+  reportCustomerDetails.innerHTML = `
+    <h3>Kunden Details ${escapeHtml(formatMonthCH(month))}</h3>
+    <div class="hours-detail-grid">${customerCards.length ? customerCards.join("") : emptyCard}</div>
   `;
 }
 function renderHourDetailsOverview() {
@@ -3346,7 +3652,7 @@ function renderHourDetailsOverview() {
           </thead>
           <tbody>
             ${sortedRows.map((row) => `<tr><td>${escapeHtml(row.weekdayShort)}</td><td>${escapeHtml(formatDateCH(row.dateValue))}</td><td>${escapeHtml(row.customerName)}</td><td>${escapeHtml(row.note || "-")}</td><td style="text-align:right;">${escapeHtml(formatPlainNumber(row.hours))}</td><td style="text-align:right;">${escapeHtml(formatPlainNumber(row.hourlyWage))}</td><td style="text-align:right;">${escapeHtml(formatPlainNumber(row.wageTotal))}</td></tr>`).join("")}
-            <tr><td colspan="4" style="font-weight:bold;">Monatstotal</td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(monthHoursTotal, 0, 2))}</td><td></td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(monthWageTotal))}</td></tr>
+            <tr><td colspan="4" style="font-weight:bold;">Monatstotal</td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(monthHoursTotal, 2, 2))}</td><td></td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(monthWageTotal))}</td></tr>
           </tbody>
         </table>
       `;
@@ -3354,7 +3660,7 @@ function renderHourDetailsOverview() {
       const textRows = sortedRows
         .map((row) => `${row.weekdayShort}\t${formatDateCH(row.dateValue)}\t${row.customerName}\t${row.note || "-"}\t${formatPlainNumber(row.hours)}\t${formatPlainNumber(row.hourlyWage)}\t${formatPlainNumber(row.wageTotal)}`)
         .join("\n");
-      const plainText = `Mitarbeiter: ${employeeName}\nTag\tDatum\tKunde\tNotiz\tStunden\tStundenlohn\tLohn (CHF)\n${textRows}\nMonatstotal\t\t\t\t${formatNumberCH(monthHoursTotal, 0, 2)}\t\t${formatNumberCH(monthWageTotal)}`;
+      const plainText = `Mitarbeiter: ${employeeName}\nTag\tDatum\tKunde\tNotiz\tStunden\tStundenlohn\tLohn (CHF)\n${textRows}\nMonatstotal\t\t\t\t${formatNumberCH(monthHoursTotal, 2, 2)}\t\t${formatNumberCH(monthWageTotal)}`;
 
       hourDetailCopyPayloadMap.set(employeeKey, { html: tableHtml, text: plainText });
 
@@ -3365,7 +3671,7 @@ function renderHourDetailsOverview() {
             </div>
             <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Kunde</span><span>Notiz</span><span>Stunden</span><span>Stundenlohn</span><span>Lohn (CHF)</span></div>
             <div class="hours-detail-body">${rowsHtml}</div>
-            <div class="hours-detail-total"><span>Monatstotal</span><strong>${escapeHtml(formatNumberCH(monthHoursTotal, 0, 2))}</strong><strong>${escapeHtml(formatNumberCH(monthWageTotal))}</strong></div>
+            <div class="hours-detail-total"><span>Monatstotal</span><strong>${escapeHtml(formatNumberCH(monthHoursTotal, 2, 2))}</strong><strong>${escapeHtml(formatNumberCH(monthWageTotal))}</strong></div>
             <div class="hours-detail-actions"><button type="button" class="secondary hours-detail-copy-btn" data-copy-key="${escapeHtml(employeeKey)}">Kopieren</button></div>
           </section>
         `;
@@ -3373,9 +3679,22 @@ function renderHourDetailsOverview() {
     })
     .sort((a, b) => a.employeeName.localeCompare(b.employeeName, "de-CH"));
 
+  const emptyDetailCard = `
+    <section class="hours-detail-card">
+      <div class="hours-detail-title-row">
+        <h4>Keine Erfassung</h4>
+      </div>
+      <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Kunde</span><span>Notiz</span><span>Stunden</span><span>Stundenlohn</span><span>Lohn (CHF)</span></div>
+      <div class="hours-detail-body">
+        <div class="hours-detail-row"><span>-</span><span>-</span><span>Keine Stunden-Erfassungen</span><span>-</span><strong>-</strong><strong>-</strong><strong>-</strong></div>
+      </div>
+      <div class="hours-detail-total"><span>Monatstotal</span><strong>0</strong><strong>0</strong></div>
+    </section>
+  `;
+
   reportHourDetails.innerHTML = `
     <h3>Stunden Detail ${escapeHtml(formatMonthCH(month))}</h3>
-    ${employeeCards.length ? `<div class="hours-detail-grid">${employeeCards.map((card) => card.cardHtml).join("")}</div>` : '<small>Keine Stunden-Erfassungen.</small>'}
+    <div class="hours-detail-grid">${employeeCards.length ? employeeCards.map((card) => card.cardHtml).join("") : emptyDetailCard}</div>
   `;
 }
 function renderProductReportOverview() {
@@ -4056,6 +4375,37 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

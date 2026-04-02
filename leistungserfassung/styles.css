@@ -759,9 +759,7 @@ button:disabled {
   padding: 0.5rem 0.35rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
+  align-items: center;`r`n  width: 100%;`r`n  min-width: 0;
   justify-content: center;
   gap: 0.2rem;
 }
@@ -849,9 +847,7 @@ button:disabled {
   border-top: 1px solid #d1d5db;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
+  align-items: center;`r`n  width: 100%;`r`n  min-width: 0;
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -1472,34 +1468,12 @@ button:disabled {
   border-radius: 0.45rem;
   line-height: 1.15;
   white-space: nowrap;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-/* Auswertung Alignment Fix (einheitliche Spaltenbasis) */
-.hours-day-content .hours-calendar-cell-columns,
-.hours-day-content .hours-calendar-list,
-.hours-day-content .hours-calendar-total,
-.hours-day-content .hours-day-empty {
-  margin-left: 1ch;
-}
-
+}
 @media (max-width: 640px) {
   .hours-day-content .hours-calendar-cell-columns,
   .hours-day-content .hours-calendar-list,
-  .hours-day-content .hours-calendar-total,
-  .hours-day-content .hours-day-empty {
-    min-width: calc(480px + 1ch);
-    box-sizing: border-box;
+  .hours-day-content .hours-calendar-total {
+    min-width: 480px;
   }
 }
 
