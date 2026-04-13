@@ -1,4 +1,4 @@
-ï»¿:root {
+:root {
   --bg: #f4f6f8;
   --surface: #ffffff;
   --text: #1f2933;
@@ -441,7 +441,6 @@ button:focus-visible,
 }
 
 
-
 .app-title-row {
   display: flex;
   align-items: center;
@@ -567,7 +566,8 @@ button:disabled {
 #entryListCustomerClear,
 #customerSearchClear,
 #employeeSearchClear,
-#itemSearchClear {
+#itemSearchClear,
+#reportCustomerDetailsSearchClear {
   min-width: 2.2rem;
   padding-inline: 0.55rem;
   line-height: 1;
@@ -847,7 +847,9 @@ button:disabled {
   border-top: 1px solid #d1d5db;
   display: flex;
   justify-content: space-between;
-  align-items: center;`r`n  width: 100%;`r`n  min-width: 0;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -865,6 +867,52 @@ button:disabled {
   .hours-calendar-cell-columns {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(72px, auto);
     gap: 0.35rem;
+  }
+
+  .hours-money-row,
+  .hours-money-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(66px, auto) minmax(92px, auto) minmax(102px, auto);
+    gap: 0.3rem;
+  }
+
+  .hours-money-total {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(66px, auto) minmax(92px, auto) minmax(102px, auto);
+    row-gap: 0.2rem;
+  }
+
+  .hours-money-total > span:first-child {
+    grid-column: 1 / 3;
+  }
+
+  .hours-money-total strong:nth-child(2) {
+    grid-column: 3;
+  }
+
+  .hours-money-total strong:nth-child(3) {
+    grid-column: 5;
+  }
+
+  .hours-money-row-customer-note,
+  .hours-money-columns-customer-note {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(66px, auto) minmax(92px, auto) minmax(102px, auto);
+    gap: 0.3rem;
+  }
+
+  .hours-money-total-customer-note {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(66px, auto) minmax(92px, auto) minmax(102px, auto);
+    row-gap: 0.2rem;
+  }
+
+  .hours-money-total-customer-note > span:first-child {
+    grid-column: 1 / 4;
+  }
+
+  .hours-money-total-customer-note strong:nth-child(2) {
+    grid-column: 4;
+  }
+
+  .hours-money-total-customer-note strong:nth-child(3) {
+    grid-column: 6;
   }
 }
 
@@ -912,6 +960,48 @@ button:disabled {
   white-space: nowrap;
 }
 
+.hours-money-row-customer-note,
+.hours-money-columns-customer-note {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(74px, auto) minmax(110px, auto) minmax(120px, auto);
+}
+
+.hours-money-row-customer-note .col-note {
+  overflow-wrap: anywhere;
+}
+
+.hours-money-row-customer-note .col-hours,
+.hours-money-row-customer-note .col-rate,
+.hours-money-row-customer-note .col-total,
+.hours-money-columns-customer-note span:nth-child(4),
+.hours-money-columns-customer-note span:nth-child(5),
+.hours-money-columns-customer-note span:nth-child(6) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours-money-total-customer-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(74px, auto) minmax(110px, auto) minmax(120px, auto);
+  gap: 0.45rem;
+}
+
+.hours-money-total-customer-note > span:first-child {
+  grid-column: 1 / 4;
+}
+
+.hours-money-total-customer-note strong:nth-child(2) {
+  grid-column: 4;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hours-money-total-customer-note strong:nth-child(3) {
+  grid-column: 6;
+  text-align: right;
+  white-space: nowrap;
+}
+
+
 @media (max-width: 420px) {
   .hours-money-row,
   .hours-money-columns {
@@ -940,7 +1030,7 @@ button:disabled {
 
 
 
-/* Auswertung Smartphone Hochformat: horizontales Scrollen statt SpaltenÃ¼berlagerung */
+/* Auswertung Smartphone Hochformat: horizontales Scrollen statt Spaltenüberlagerung */
 @media (max-width: 640px) {
   .hours-day-content {
     overflow-x: auto;
@@ -1203,7 +1293,7 @@ button:disabled {
 }
 
 
-/* Auswertung: Monatsfeld darf den Frame nie Ã¼berlaufen */
+/* Auswertung: Monatsfeld darf den Frame nie überlaufen */
 #auswertung label:has(#reportMonth),
 #reportMonth {
   width: 100%;
@@ -1468,7 +1558,8 @@ button:disabled {
   border-radius: 0.45rem;
   line-height: 1.15;
   white-space: nowrap;
-}
+}
+
 @media (max-width: 640px) {
   .hours-day-content .hours-calendar-cell-columns,
   .hours-day-content .hours-calendar-list,
@@ -1516,4 +1607,249 @@ button:disabled {
   margin-top: 0.35rem;
   display: flex;
   justify-content: flex-end;
+}
+
+/* FINAL override: Kalender Kunden mit Notiz exakt ausrichten */
+.hours-calendar-cell-columns.hours-money-columns.hours-money-columns-customer-note,
+.hours-calendar-row.hours-money-row.hours-money-row-customer-note {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) minmax(78px, auto) minmax(90px, auto) !important;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-customer-note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) minmax(78px, auto) minmax(90px, auto) !important;
+  gap: 0.45rem;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-customer-note > span:first-child {
+  grid-column: 1 / 4;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-customer-note strong:nth-child(2) {
+  grid-column: 4;
+  text-align: right;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-customer-note strong:nth-child(3) {
+  grid-column: 6;
+  text-align: right;
+}
+
+.hours-calendar-row.hours-money-row.hours-money-row-customer-note .col-note,
+.hours-calendar-cell-columns.hours-money-columns.hours-money-columns-customer-note span:nth-child(3) {
+  text-align: left;
+}
+
+@media (max-width: 420px) {
+  .hours-calendar-cell-columns.hours-money-columns.hours-money-columns-customer-note,
+  .hours-calendar-row.hours-money-row.hours-money-row-customer-note {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(52px, auto) minmax(74px, auto) minmax(84px, auto) !important;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-customer-note {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(52px, auto) minmax(74px, auto) minmax(84px, auto) !important;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-customer-note > span:first-child {
+    grid-column: 1 / 4;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-customer-note strong:nth-child(2) {
+    grid-column: 4;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-customer-note strong:nth-child(3) {
+    grid-column: 6;
+  }
+}
+
+/* FINAL override: Kalender Mitarbeiter exakt ausrichten */
+.hours-calendar-cell-columns.hours-money-columns.hours-money-columns-employee-calendar,
+.hours-calendar-row.hours-money-row.hours-money-row-employee-calendar {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) minmax(78px, auto) minmax(90px, auto) !important;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-employee-calendar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) minmax(78px, auto) minmax(90px, auto) !important;
+  gap: 0.45rem;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-employee-calendar > span:first-child {
+  grid-column: 1 / 4;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-employee-calendar strong:nth-child(2) {
+  grid-column: 4;
+  text-align: right;
+}
+
+.hours-calendar-total.hours-money-total.hours-money-total-employee-calendar strong:nth-child(3) {
+  grid-column: 6;
+  text-align: right;
+}
+
+@media (max-width: 420px) {
+  .hours-calendar-cell-columns.hours-money-columns.hours-money-columns-employee-calendar,
+  .hours-calendar-row.hours-money-row.hours-money-row-employee-calendar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(52px, auto) minmax(74px, auto) minmax(84px, auto) !important;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-employee-calendar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(52px, auto) minmax(74px, auto) minmax(84px, auto) !important;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-employee-calendar > span:first-child {
+    grid-column: 1 / 4;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-employee-calendar strong:nth-child(2) {
+    grid-column: 4;
+  }
+
+  .hours-calendar-total.hours-money-total.hours-money-total-employee-calendar strong:nth-child(3) {
+    grid-column: 6;
+  }
+}
+/* FINAL override: Kalender Produkte exakt ausrichten */
+.hours-calendar-cell-columns.hours-money-columns.products-columns.hours-money-columns-products-calendar,
+.hours-calendar-row.hours-money-row.products-row.hours-money-row-products-calendar {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) minmax(78px, auto) minmax(90px, auto) !important;
+}
+
+.hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) minmax(78px, auto) minmax(90px, auto) !important;
+  gap: 0.45rem;
+}
+
+.hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar > span:first-child {
+  grid-column: 1 / 4;
+}
+
+.hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar strong:nth-child(2) {
+  grid-column: 4;
+  text-align: right;
+}
+
+.hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar strong:nth-child(3) {
+  grid-column: 6;
+  text-align: right;
+}
+
+@media (max-width: 420px) {
+  .hours-calendar-cell-columns.hours-money-columns.products-columns.hours-money-columns-products-calendar,
+  .hours-calendar-row.hours-money-row.products-row.hours-money-row-products-calendar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(52px, auto) minmax(74px, auto) minmax(84px, auto) !important;
+  }
+
+  .hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(52px, auto) minmax(74px, auto) minmax(84px, auto) !important;
+  }
+
+  .hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar > span:first-child {
+    grid-column: 1 / 4;
+  }
+
+  .hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar strong:nth-child(2) {
+    grid-column: 4;
+  }
+
+  .hours-calendar-total.hours-money-total.products-total.hours-money-total-products-calendar strong:nth-child(3) {
+    grid-column: 6;
+  }
+}
+
+.hours-calendar-row.hours-money-row.hours-money-row-employee-calendar .col-note,
+.hours-calendar-cell-columns.hours-money-columns.hours-money-columns-employee-calendar span:nth-child(3),
+.hours-calendar-row.hours-money-row.products-row.hours-money-row-products-calendar .col-note,
+.hours-calendar-cell-columns.hours-money-columns.products-columns.hours-money-columns-products-calendar span:nth-child(3) {
+  text-align: left;
+}
+
+/* Kunden Details: eigene 9-Spalten-Ansicht mit Notiz + Ansatz */
+#reportCustomerDetails .hours-detail-head,
+#reportCustomerDetails .hours-detail-row,
+#reportCustomerDetails .hours-detail-total {
+  grid-template-columns: 32px 74px minmax(145px, 1fr) minmax(145px, 1fr) minmax(72px, 0.7fr) minmax(62px, auto) minmax(20px, auto) minmax(84px, auto) minmax(96px, auto);
+}
+
+#reportCustomerDetails .hours-detail-row span:nth-child(3),
+#reportCustomerDetails .hours-detail-row span:nth-child(4),
+#reportCustomerDetails .hours-detail-row span:nth-child(5) {
+  overflow-wrap: anywhere;
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(6),
+#reportCustomerDetails .hours-detail-head span:nth-child(8),
+#reportCustomerDetails .hours-detail-head span:nth-child(9),
+#reportCustomerDetails .hours-detail-row strong,
+#reportCustomerDetails .hours-detail-total strong {
+  text-align: right;
+  white-space: nowrap;
+}
+
+#reportCustomerDetails .hours-detail-total span {
+  grid-column: 1 / 6;
+}
+
+#reportCustomerDetails .hours-detail-total strong:nth-of-type(1) {
+  grid-column: 6;
+}
+
+#reportCustomerDetails .hours-detail-total strong:nth-of-type(2) {
+  grid-column: 8;
+}
+
+#reportCustomerDetails .hours-detail-total strong:nth-of-type(3) {
+  grid-column: 9;
+}
+
+@media (max-width: 640px) {
+  #reportCustomerDetails .hours-detail-head,
+  #reportCustomerDetails .hours-detail-body,
+  #reportCustomerDetails .hours-detail-total {
+    min-width: 880px;
+  }
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(7),
+#reportCustomerDetails .hours-detail-row span:nth-child(7) {
+  text-align: left;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(5),
+#reportCustomerDetails .hours-detail-row span:nth-child(5) {
+  text-align: left;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(6),
+#reportCustomerDetails .hours-detail-row strong:nth-of-type(1),
+#reportCustomerDetails .hours-detail-total strong:nth-of-type(1) {
+  text-align: right;
+  justify-self: end;
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(7),
+#reportCustomerDetails .hours-detail-row span:nth-child(7) {
+  text-align: left;
+  justify-self: start;
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(8),
+#reportCustomerDetails .hours-detail-row strong:nth-of-type(2),
+#reportCustomerDetails .hours-detail-total strong:nth-of-type(2) {
+  text-align: right;
+  justify-self: end;
+}
+
+#reportCustomerDetails .hours-detail-head span:nth-child(9),
+#reportCustomerDetails .hours-detail-row strong:nth-of-type(3),
+#reportCustomerDetails .hours-detail-total strong:nth-of-type(3) {
+  text-align: right;
+  justify-self: end;
 }

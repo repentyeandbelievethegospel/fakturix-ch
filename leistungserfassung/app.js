@@ -12,6 +12,8 @@ let itemSuggestionMap = new Map();
 let splitEmployeeQuantityMap = new Map();
 let hourDetailCopyPayloadMap = new Map();
 let hourSumsCopyPayloadMap = new Map();
+let customerDetailCopyPayloadMap = new Map();
+let customerDetailsSearchQuery = "";
 ensureCleaningServiceExists();
 enforceFixedUnitsCatalog();
 
@@ -135,6 +137,7 @@ wireCrudActions();
 wireExport();
 wireImport();
 wireSearch();
+wireCustomerDetailsSearch();
 wireCustomerSearch();
 wireEmployeeSearch();
 wireItemSearch();
@@ -144,6 +147,7 @@ wireSettings();
 wireReportOverview();
 wireHourSumsCopy();
 wireHourDetailsCopy();
+wireCustomerDetailsCopy();
 wireResetConfirmation();
 wireRequiredFieldStates();
 renderAll();
@@ -662,7 +666,7 @@ function wireForms() {
         date: data.date,
         quantity: normalizedQuantity,
         note: data.note?.trim() || "",
-        unitPrice,
+        unitPrice: ansatz,
         costPrice
       };
 
@@ -679,7 +683,7 @@ function wireForms() {
           date: data.date,
           quantity: employeeQuantity,
           note: data.note?.trim() || "",
-          unitPrice,
+          unitPrice: ansatz,
           costPrice
         };
         const merged = mergeEntryIntoState(entry, item);
@@ -895,7 +899,7 @@ function wireExport() {
                 text: "Export der mobilen Erfassungsdaten",
                 files: [file]
               });
-                exportStatus.textContent = `Export über Teilen-Menü erfolgreich. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}. Gelöschte Stammdaten ohne Abhängigkeiten entfernt: Kunden ${removedCustomerCount}, Mitarbeiter ${removedEmployeeCount}, Produkte ${removedItemCount}, Einheiten ${removedUnitCount}, Produkttypen ${removedTypeCount}.`;
+                exportStatus.textContent = `Export Über Teilen-Menü erfolgreich. Alte Erfassungen älter als ${retentionMonthsCount} Monat(e) gelöscht: ${removedCount}. Gelöschte Stammdaten ohne Abhängigkeiten entfernt: Kunden ${removedCustomerCount}, Mitarbeiter ${removedEmployeeCount}, Produkte ${removedItemCount}, Einheiten ${removedUnitCount}, Produkttypen ${removedTypeCount}.`;
                 showFlashMessage("Export war erfolgreich");
               renderExportCleanupPreview();
               return;
@@ -1055,6 +1059,37 @@ function wireSearch() {
     renderEntries();
   });
 }
+
+function wireCustomerDetailsSearch() {
+  if (!reportCustomerDetails) return;
+
+  reportCustomerDetails.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!target || target.id !== "reportCustomerDetailsSearch") return;
+    const value = String(target.value || "");
+    const cursorPos = typeof target.selectionStart === "number" ? target.selectionStart : value.length;
+    customerDetailsSearchQuery = value;
+    renderCustomerDetailsOverview();
+    window.requestAnimationFrame(() => {
+      const input = reportCustomerDetails.querySelector("#reportCustomerDetailsSearch");
+      if (!input) return;
+      input.focus();
+      const safePos = Math.min(cursorPos, input.value.length);
+      input.setSelectionRange(safePos, safePos);
+    });
+  });
+
+  reportCustomerDetails.addEventListener("click", (event) => {
+    const clearBtn = event.target.closest("#reportCustomerDetailsSearchClear");
+    if (!clearBtn) return;
+    customerDetailsSearchQuery = "";
+    renderCustomerDetailsOverview();
+    window.requestAnimationFrame(() => {
+      const input = reportCustomerDetails.querySelector("#reportCustomerDetailsSearch");
+      if (input) input.focus();
+    });
+  });
+}
 function wireCustomerSearch() {
   customerSearch.addEventListener("input", () => {
     renderCustomers();
@@ -1174,7 +1209,7 @@ function wireImport() {
       }
 
       const overwriteConfirmed = confirm(
-        "Achtung: Beim Import werden alle aktuellen mobilen Daten überschrieben. Möchten Sie fortfahren?"
+        "Achtung: Beim Import werden alle aktuellen mobilen Daten Überschrieben. Möchten Sie fortfahren?"
       );
       if (!overwriteConfirmed) {
         importStatus.textContent = "Import abgebrochen.";
@@ -2707,7 +2742,18 @@ function formatNumberCH(value, minimumFractionDigits = 2, maximumFractionDigits 
     minimumFractionDigits,
     maximumFractionDigits
   });
-}function parseAmount(value) {
+}
+
+function formatPlainNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0";
+  return (Math.round(n * 100) / 100).toLocaleString("de-CH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+}
+
+function parseAmount(value) {
   if (value === "" || value == null) return null;
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n : null;
@@ -2775,6 +2821,37 @@ function wireHourDetailsCopy() {
 
     const key = String(button.dataset.copyKey || "").trim();
     const payload = hourDetailCopyPayloadMap.get(key);
+    if (!payload?.html || !payload?.text) return;
+
+    const oldText = button.textContent;
+    const oldDisabled = button.disabled;
+    button.disabled = true;
+
+    try {
+      const copied = await copyHtmlAndTextToClipboard(payload.html, payload.text);
+      if (!copied) throw new Error("clipboard-unavailable");
+      button.textContent = "Kopiert";
+      showFlashMessage("HTML-Tabelle kopiert");
+      window.setTimeout(() => {
+        button.textContent = oldText || "Kopieren";
+        button.disabled = oldDisabled;
+      }, 900);
+    } catch {
+      button.textContent = oldText || "Kopieren";
+      button.disabled = oldDisabled;
+      alert("Kopieren fehlgeschlagen.");
+    }
+  });
+}
+
+function wireCustomerDetailsCopy() {
+  if (!reportCustomerDetails) return;
+  reportCustomerDetails.addEventListener("click", async (event) => {
+    const button = event.target.closest(".customer-detail-copy-btn");
+    if (!button) return;
+
+    const key = String(button.dataset.copyKey || "").trim();
+    const payload = customerDetailCopyPayloadMap.get(key);
     if (!payload?.html || !payload?.text) return;
 
     const oldText = button.textContent;
@@ -2892,14 +2969,15 @@ function renderReportOverview() {
     const employeeName = getEmployeeShort(employee);
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
     const lineTotal = qty * unitPrice;
 
     if (!byDay.has(date)) byDay.set(date, new Map());
     const dayMap = byDay.get(date);
 
-    const key = `${customerName}|||${employeeName}|||${unitPrice}`;
-    const current = dayMap.get(key) || { customerName, employeeName, qty: 0, unitPrice, amount: 0 };
+    const key = `${customerName}|||${employeeName}|||${note}|||${unitPrice}`;
+    const current = dayMap.get(key) || { customerName, employeeName, note, qty: 0, unitPrice, amount: 0 };
     current.qty += qty;
     current.amount += lineTotal;
     dayMap.set(key, current);
@@ -2928,9 +3006,10 @@ function renderReportOverview() {
       const flushCustomerTotal = () => {
         if (!currentCustomer) return;
         html += `
-          <li class="hours-calendar-row hours-money-row hours-customer-total">
+          <li class="hours-calendar-row hours-money-row hours-money-row-customer-note hours-customer-total">
             <span class="col-customer">Kundentotal</span>
             <span class="col-employee"></span>
+            <span class="col-note"></span>
             <strong class="col-hours">${escapeHtml(formatNumberCH(customerHours, 2, 2))}</strong>
             <strong class="col-rate"></strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(customerAmount))}</strong>
@@ -2951,9 +3030,10 @@ function renderReportOverview() {
         customerHours += Number(row.qty) || 0;
         customerAmount += Number(row.amount) || 0;
         html += `
-          <li class="hours-calendar-row hours-money-row">
+          <li class="hours-calendar-row hours-money-row hours-money-row-customer-note">
             <span class="col-customer">${escapeHtml(row.customerName)}</span>
             <span class="col-employee">${escapeHtml(row.employeeName)}</span>
+            <span class="col-note">${escapeHtml(row.note || "-")}</span>
             <strong class="col-hours">${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
             <strong class="col-rate">${escapeHtml(formatNumberCH(row.unitPrice))}</strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(row.amount))}</strong>
@@ -2968,9 +3048,9 @@ function renderReportOverview() {
 
     const detailsHtml = rows.length
       ? `
-        <div class="hours-calendar-cell-columns hours-money-columns"><span>Kunde</span><span>Mitarbeiter</span><span>Stunden</span><span>Ansatz</span><span>Total (CHF)</span></div>
+        <div class="hours-calendar-cell-columns hours-money-columns hours-money-columns-customer-note"><span>Kunde</span><span>Mitarbeiter</span><span>Notiz</span><span>Stunden</span><span>Ansatz</span><span>Total (CHF)</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total hours-day-total">
+        <div class="hours-calendar-total hours-money-total hours-money-total-customer-note hours-day-total">
           <span>Tagestotal</span>
           <strong>${escapeHtml(formatNumberCH(totalHours, 2, 2))}</strong>
           <strong>${escapeHtml(formatNumberCH(totalAmount))}</strong>
@@ -3049,14 +3129,15 @@ function renderEmployeeReportOverview() {
     const customerName = getCustomerShort(customer);
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
     const amount = qty * unitPrice;
 
     if (!byDay.has(date)) byDay.set(date, new Map());
     const dayMap = byDay.get(date);
 
-    const key = `${employeeName}|||${customerName}|||${unitPrice}`;
-    const current = dayMap.get(key) || { employeeName, customerName, qty: 0, unitPrice, amount: 0 };
+    const key = `${employeeName}|||${customerName}|||${note}|||${unitPrice}`;
+    const current = dayMap.get(key) || { employeeName, customerName, note, qty: 0, unitPrice, amount: 0 };
     current.qty += qty;
     current.amount += amount;
     dayMap.set(key, current);
@@ -3085,9 +3166,10 @@ function renderEmployeeReportOverview() {
       const flushEmployeeTotal = () => {
         if (!currentEmployee) return;
         html += `
-          <li class="hours-calendar-row hours-money-row hours-customer-total">
+          <li class="hours-calendar-row hours-money-row hours-money-row-employee-calendar hours-customer-total">
             <span class="col-customer">Mitarbeitertotal</span>
             <span class="col-employee"></span>
+            <span class="col-note"></span>
             <strong class="col-hours">${escapeHtml(formatNumberCH(employeeHours, 2, 2))}</strong>
             <strong class="col-rate"></strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(employeeAmount))}</strong>
@@ -3108,9 +3190,10 @@ function renderEmployeeReportOverview() {
         employeeHours += Number(row.qty) || 0;
         employeeAmount += Number(row.amount) || 0;
         html += `
-          <li class="hours-calendar-row hours-money-row">
+          <li class="hours-calendar-row hours-money-row hours-money-row-employee-calendar">
             <span class="col-customer">${escapeHtml(row.employeeName)}</span>
             <span class="col-employee">${escapeHtml(row.customerName)}</span>
+            <span class="col-note">${escapeHtml(row.note || "-")}</span>
             <strong class="col-hours">${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
             <strong class="col-rate">${escapeHtml(formatNumberCH(row.unitPrice))}</strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(row.amount))}</strong>
@@ -3123,9 +3206,9 @@ function renderEmployeeReportOverview() {
 
     const detailsHtml = rows.length
       ? `
-        <div class="hours-calendar-cell-columns hours-money-columns"><span>Mitarbeiter</span><span>Kunde</span><span>Stunden</span><span>Ansatz</span><span>Total (CHF)</span></div>
+        <div class="hours-calendar-cell-columns hours-money-columns hours-money-columns-employee-calendar"><span>Mitarbeiter</span><span>Kunde</span><span>Notiz</span><span>Stunden</span><span>Ansatz</span><span>Total (CHF)</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total hours-day-total">
+        <div class="hours-calendar-total hours-money-total hours-money-total-employee-calendar hours-day-total">
           <span>Tagestotal</span>
           <strong>${escapeHtml(formatNumberCH(totalHours, 2, 2))}</strong>
           <strong>${escapeHtml(formatNumberCH(totalAmount))}</strong>
@@ -3189,6 +3272,7 @@ function renderHourSumsOverview() {
     if (!["h", "std", "stunde", "stunden", "stunde/n"].includes(unit)) return;
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     if (qty <= 0) return;
 
     const employee = state.employees.find((e) => e.id === String(entry.employeeId || ""));
@@ -3295,6 +3379,7 @@ function renderProductSumsOverview() {
     if (!["stk", "stück", "stueck", "stuecke", "stücke"].includes(unit)) return;
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     if (qty <= 0) return;
 
     const customer = state.customers.find((cst) => cst.id === String(entry.customerId || ""));
@@ -3379,6 +3464,7 @@ function renderProductDetailsOverview() {
     if (!["stk", "stück", "stueck", "stuecke", "stücke"].includes(unit)) return;
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     if (qty <= 0) return;
 
     const customer = state.customers.find((c) => c.id === String(entry.customerId || ""));
@@ -3388,6 +3474,7 @@ function renderProductDetailsOverview() {
     const itemName = String(item?.name || "Unbekanntes Produkt");
     const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
     const total = qty * unitPrice;
+    const ansatz = Number.isFinite(unitPrice) ? unitPrice : (qty ? total / qty : 0);
 
     const dateValue = String(entry?.date || "").slice(0, 10);
     const parsed = new Date(dateValue);
@@ -3401,7 +3488,7 @@ function renderProductDetailsOverview() {
       customerName,
       employeeName,
       qty,
-      unitPrice,
+      unitPrice: ansatz,
       total
     });
     byProduct.set(productId, group);
@@ -3420,7 +3507,7 @@ function renderProductDetailsOverview() {
           <span>${escapeHtml(row.customerName)}</span>
           <span>${escapeHtml(row.employeeName)}</span>
           <strong>${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
-          <strong>${escapeHtml(formatNumberCH(row.unitPrice, 2, 2))}</strong>
+          <strong>${escapeHtml(formatNumberCH((row.unitPrice != null ? row.unitPrice : ((Number(row.qty) || 0) ? (Number(row.total) || 0) / (Number(row.qty) || 1) : 0)), 2, 2))}</strong>
           <strong>${escapeHtml(formatNumberCH(row.total, 2, 2))}</strong>
         </div>
       `).join("");
@@ -3447,7 +3534,7 @@ function renderProductDetailsOverview() {
       <div class="hours-detail-body">
         <div class="hours-detail-row"><span>-</span><span>-</span><span>Keine Produkte-Erfassungen</span><span>-</span><strong>-</strong><strong>-</strong><strong>-</strong></div>
       </div>
-      <div class="hours-detail-total"><span>Monatstotal</span><strong>0</strong><strong>0</strong></div>
+      <div class="hours-detail-total"><span>Monatstotal</span><strong></strong><strong></strong><strong>0</strong></div>
     </section>
   `;
 
@@ -3459,6 +3546,7 @@ function renderProductDetailsOverview() {
 function renderCustomerDetailsOverview() {
   if (!reportCustomerDetails || !reportMonth) return;
   const month = String(reportMonth.value || "").trim();
+  customerDetailCopyPayloadMap = new Map();
 
   if (!month) {
     reportCustomerDetails.innerHTML = "<small>Bitte Monat wählen.</small>";
@@ -3493,8 +3581,10 @@ function renderCustomerDetailsOverview() {
     const itemName = String(item?.name || "Unbekannt");
     const unitName = getItemUnitName(item) || "-";
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
     const total = qty * unitPrice;
+    const ansatz = Number.isFinite(unitPrice) ? unitPrice : (qty ? total / qty : 0);
 
     const dateValue = String(entry?.date || "").slice(0, 10);
     const parsed = new Date(dateValue);
@@ -3506,19 +3596,47 @@ function renderCustomerDetailsOverview() {
       dateValue,
       employeeName,
       itemName,
+      note,
       qty,
       unitName,
+      unitPrice: ansatz,
       total
     });
     byCustomer.set(customerId, group);
   });
 
-  const customerCards = [...byCustomer.values()]
-    .sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH"))
-    .map((group) => {
+  const searchValue = String(customerDetailsSearchQuery || "");
+  const searchQuery = normalizeSearchText(searchValue);
+
+  const sortedGroups = [...byCustomer.values()]
+    .sort((a, b) => a.customerName.localeCompare(b.customerName, "de-CH"));
+
+  const visibleGroups = searchQuery
+    ? sortedGroups.filter((group) => normalizeSearchText(group.customerName).includes(searchQuery))
+    : sortedGroups;
+
+  const customerCards = visibleGroups
+    .map((group, groupIndex) => {
       const sortedRows = group.rows.slice().sort((a, b) => String(a.dateValue).localeCompare(String(b.dateValue), "de-CH") || a.itemName.localeCompare(b.itemName, "de-CH"));
       const monthAmountTotal = sortedRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
-      const countTotal = sortedRows.length;
+
+      const customerKey = `customer-detail-${groupIndex}`;
+      const tableHtml = `
+        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%;">
+          <thead>
+            <tr><th>Tag</th><th>Datum</th><th>Mitarbeiter</th><th>Leistung</th><th>Notiz</th><th>Menge</th><th>Einheit</th><th>Ansatz</th><th>Total (CHF)</th></tr>
+          </thead>
+          <tbody>
+            ${sortedRows.map((row) => `<tr><td>${escapeHtml(row.weekdayShort)}</td><td>${escapeHtml(formatDateCH(row.dateValue))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.itemName)}</td><td>${escapeHtml(row.note || "-")}</td><td style="text-align:right;">${escapeHtml(formatPlainNumber(row.qty))}</td><td>${escapeHtml(String(row.unitName))}</td><td style="text-align:right;">${escapeHtml(formatPlainNumber(row.unitPrice != null ? row.unitPrice : ((Number(row.qty) || 0) ? (Number(row.total) || 0) / (Number(row.qty) || 1) : 0)))}</td><td style="text-align:right;">${escapeHtml(formatPlainNumber(row.total))}</td></tr>`).join("")}
+            <tr><td colspan="7" style="font-weight:bold;">Monatstotal</td><td></td><td style="text-align:right; font-weight:bold;">${escapeHtml(formatNumberCH(monthAmountTotal, 2, 2))}</td></tr>
+          </tbody>
+        </table>
+      `;
+      const textRows = sortedRows
+        .map((row) => `${row.weekdayShort}\t${formatDateCH(row.dateValue)}\t${row.employeeName}\t${row.itemName}\t${row.note || "-"}\t${formatPlainNumber(row.qty)}\t${String(row.unitName)}\t${formatPlainNumber(row.unitPrice != null ? row.unitPrice : ((Number(row.qty) || 0) ? (Number(row.total) || 0) / (Number(row.qty) || 1) : 0))}\t${formatPlainNumber(row.total)}`)
+        .join("\n");
+      const plainText = `Kunde: ${group.customerName}\nTag\tDatum\tMitarbeiter\tLeistung\tNotiz\tMenge\tEinheit\tAnsatz\tTotal (CHF)\n${textRows}\nMonatstotal\t\t\t\t\t\t\t\t${formatNumberCH(monthAmountTotal, 2, 2)}`;
+      customerDetailCopyPayloadMap.set(customerKey, { html: tableHtml, text: plainText });
 
       const rowsHtml = sortedRows.map((row) => `
         <div class="hours-detail-row">
@@ -3526,8 +3644,10 @@ function renderCustomerDetailsOverview() {
           <span>${escapeHtml(formatDateCH(row.dateValue))}</span>
           <span>${escapeHtml(row.employeeName)}</span>
           <span>${escapeHtml(row.itemName)}</span>
+          <span>${escapeHtml(row.note || "-")}</span>
           <strong>${escapeHtml(formatNumberCH(row.qty, 2, 2))}</strong>
-          <strong>${escapeHtml(String(row.unitName))}</strong>
+          <span>${escapeHtml(String(row.unitName))}</span>
+          <strong>${escapeHtml(formatNumberCH((row.unitPrice != null ? row.unitPrice : ((Number(row.qty) || 0) ? (Number(row.total) || 0) / (Number(row.qty) || 1) : 0)), 2, 2))}</strong>
           <strong>${escapeHtml(formatNumberCH(row.total, 2, 2))}</strong>
         </div>
       `).join("");
@@ -3537,28 +3657,39 @@ function renderCustomerDetailsOverview() {
           <div class="hours-detail-title-row">
             <h4>${escapeHtml(group.customerName)}</h4>
           </div>
-          <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Mitarbeiter</span><span>Leistung</span><span>Menge</span><span>Einheit</span><span>Total (CHF)</span></div>
+          <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Mitarbeiter</span><span>Leistung</span><span>Notiz</span><span>Menge</span><span>Einheit</span><span>Ansatz</span><span>Total (CHF)</span></div>
           <div class="hours-detail-body">${rowsHtml}</div>
-          <div class="hours-detail-total"><span>Monatstotal</span><strong>${escapeHtml(String(countTotal))}</strong><strong>${escapeHtml(formatNumberCH(monthAmountTotal, 2, 2))}</strong></div>
+          <div class="hours-detail-total"><span>Monatstotal</span><strong></strong><strong></strong><strong>${escapeHtml(formatNumberCH(monthAmountTotal, 2, 2))}</strong></div>
+          <div class="hours-detail-actions"><button type="button" class="secondary hours-detail-copy-btn customer-detail-copy-btn" data-copy-key="${escapeHtml(customerKey)}">Kopieren</button></div>
         </section>
       `;
     });
 
+  const hasAnyCustomerData = sortedGroups.length > 0;
+  const emptyTitle = hasAnyCustomerData ? "Keine Treffer" : "Keine Erfassung";
+  const emptyText = hasAnyCustomerData ? "Keine Kunden für den Suchbegriff" : "Keine Erfassungen";
+
   const emptyCard = `
     <section class="hours-detail-card">
       <div class="hours-detail-title-row">
-        <h4>Keine Erfassung</h4>
+        <h4>${escapeHtml(emptyTitle)}</h4>
       </div>
-      <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Mitarbeiter</span><span>Leistung</span><span>Menge</span><span>Einheit</span><span>Total (CHF)</span></div>
+      <div class="hours-detail-head"><span>Tag</span><span>Datum</span><span>Mitarbeiter</span><span>Leistung</span><span>Notiz</span><span>Menge</span><span>Einheit</span><span>Ansatz</span><span>Total (CHF)</span></div>
       <div class="hours-detail-body">
-        <div class="hours-detail-row"><span>-</span><span>-</span><span>-</span><span>Keine Erfassungen</span><strong>-</strong><strong>-</strong><strong>-</strong></div>
+        <div class="hours-detail-row"><span>-</span><span>-</span><span>-</span><span>${escapeHtml(emptyText)}</span><span>-</span><strong>-</strong><span>-</span><strong>-</strong><strong>-</strong></div>
       </div>
-      <div class="hours-detail-total"><span>Monatstotal</span><strong>0</strong><strong>0</strong></div>
+      <div class="hours-detail-total"><span>Monatstotal</span><strong></strong><strong></strong><strong>0</strong></div>
     </section>
   `;
 
   reportCustomerDetails.innerHTML = `
     <h3>Kunden Details ${escapeHtml(formatMonthCH(month))}</h3>
+    <div class="entry-list-filter-row customer-details-filter-row">
+      <label class="entry-list-filter-label">Kunde suchen
+        <input id="reportCustomerDetailsSearch" type="search" placeholder="Name, Firma..." autocomplete="off" value="${escapeHtml(searchValue)}" />
+      </label>
+      <button id="reportCustomerDetailsSearchClear" type="button" class="secondary" aria-label="Kundensuche zurücksetzen">X</button>
+    </div>
     <div class="hours-detail-grid">${customerCards.length ? customerCards.join("") : emptyCard}</div>
   `;
 }
@@ -3595,6 +3726,7 @@ function renderHourDetailsOverview() {
     if (!["h", "std", "stunde", "stunden", "stunde/n"].includes(unit)) return;
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     if (qty <= 0) return;
 
     const employee = state.employees.find((e) => e.id === String(entry.employeeId || ""));
@@ -3688,7 +3820,7 @@ function renderHourDetailsOverview() {
       <div class="hours-detail-body">
         <div class="hours-detail-row"><span>-</span><span>-</span><span>Keine Stunden-Erfassungen</span><span>-</span><strong>-</strong><strong>-</strong><strong>-</strong></div>
       </div>
-      <div class="hours-detail-total"><span>Monatstotal</span><strong>0</strong><strong>0</strong></div>
+      <div class="hours-detail-total"><span>Monatstotal</span><strong></strong><strong></strong><strong>0</strong></div>
     </section>
   `;
 
@@ -3755,14 +3887,15 @@ function renderProductReportOverview() {
     const itemName = item?.name ? String(item.name) : "Unbekanntes Produkt";
 
     const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
     const unitPrice = entry?.unitPrice != null ? (Number(entry.unitPrice) || 0) : (Number(resolveEntryUnitPrice(item)) || 0);
     const amount = qty * unitPrice;
 
     if (!byDay.has(date)) byDay.set(date, new Map());
     const dayMap = byDay.get(date);
 
-    const key = `${customerName}|||${itemName}|||${unitPrice}`;
-    const current = dayMap.get(key) || { customerName, itemName, qty: 0, unitPrice, amount: 0 };
+    const key = `${customerName}|||${itemName}|||${note}|||${unitPrice}`;
+    const current = dayMap.get(key) || { customerName, itemName, note, qty: 0, unitPrice, amount: 0 };
     current.qty += qty;
     current.amount += amount;
     dayMap.set(key, current);
@@ -3791,9 +3924,10 @@ function renderProductReportOverview() {
       const flushCustomerTotal = () => {
         if (!currentCustomer) return;
         html += `
-          <li class="hours-calendar-row hours-money-row products-row hours-customer-total">
+          <li class="hours-calendar-row hours-money-row products-row hours-money-row-products-calendar hours-customer-total">
             <span class="col-customer">Kundentotal</span>
             <span class="col-employee"></span>
+            <span class="col-note"></span>
             <strong class="col-hours">${escapeHtml(String((Math.round((customerQty || 0) * 100) / 100).toLocaleString("de-CH")))}</strong>
             <strong class="col-rate"></strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(customerAmount))}</strong>
@@ -3814,9 +3948,10 @@ function renderProductReportOverview() {
         customerQty += Number(row.qty) || 0;
         customerAmount += Number(row.amount) || 0;
         html += `
-          <li class="hours-calendar-row hours-money-row products-row">
+          <li class="hours-calendar-row hours-money-row products-row hours-money-row-products-calendar">
             <span class="col-customer">${escapeHtml(row.customerName)}</span>
             <span class="col-employee">${escapeHtml(row.itemName)}</span>
+            <span class="col-note">${escapeHtml(row.note || "-")}</span>
             <strong class="col-hours">${escapeHtml(String((Math.round((row.qty || 0) * 100) / 100).toLocaleString("de-CH")))}</strong>
             <strong class="col-rate">${escapeHtml(formatNumberCH(row.unitPrice))}</strong>
             <strong class="col-total">${escapeHtml(formatNumberCH(row.amount))}</strong>
@@ -3831,9 +3966,9 @@ function renderProductReportOverview() {
 
     const detailsHtml = rows.length
       ? `
-        <div class="hours-calendar-cell-columns hours-money-columns products-columns"><span>Kunde</span><span>Produkt</span><span>Menge</span><span>Ansatz</span><span>Total (CHF)</span></div>
+        <div class="hours-calendar-cell-columns hours-money-columns products-columns hours-money-columns-products-calendar"><span>Kunde</span><span>Produkt</span><span>Notiz</span><span>Menge</span><span>Ansatz</span><span>Total (CHF)</span></div>
         <ul class="hours-calendar-list">${rowsHtml}</ul>
-        <div class="hours-calendar-total hours-money-total products-total hours-day-total">
+        <div class="hours-calendar-total hours-money-total products-total hours-money-total-products-calendar hours-day-total">
           <span>Tagestotal</span>
           <strong>${escapeHtml(String((Math.round((totalQty || 0) * 100) / 100).toLocaleString("de-CH")))}</strong>
           <strong>${escapeHtml(formatNumberCH(totalAmount))}</strong>
@@ -4324,6 +4459,7 @@ function renderExportCleanupResult(plan) {
         const itemLabel = item ? item.name : "Unbekannte Leistung";
         const unit = getItemUnitName(item);
         const qty = Number(entry.quantity) || 0;
+    const note = String(entry.note || "").trim();
         const cardHtml = `
           <article class="cleanup-result-row">
             <strong>${escapeHtml(formatDateCH(entry.date || ""))}</strong><br>
@@ -4375,6 +4511,9 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
 
 
 
