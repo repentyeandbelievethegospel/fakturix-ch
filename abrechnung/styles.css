@@ -362,6 +362,11 @@ th, td {
   font-size: 13px;
   word-break: break-word;
 }
+
+.invoice th,
+.invoice td {
+  vertical-align: top;
+}
 .invoice th.nowrap,
 .invoice td.nowrap {
   white-space: nowrap;
@@ -1873,3 +1878,4 @@ button:disabled {
     min-width: 480px;
   }
 }
+

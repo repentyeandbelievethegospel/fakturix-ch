@@ -195,7 +195,8 @@ function baseState() {
     employees: [],
     items: [],
     entries: [],
-    invoices: []
+    invoices: [],
+    invoiceSequenceByMonth: {}
   };
 }
 
@@ -438,7 +439,8 @@ function loadState() {
       employees: Array.isArray(parsed.employees) ? parsed.employees : [],
       items: (Array.isArray(parsed.items) ? parsed.items : []).map((item) => normalizeItemRecord(item)),
       entries: (Array.isArray(parsed.entries) ? parsed.entries : []).map((entry) => normalizeEntryRecord(entry)),
-      invoices: Array.isArray(parsed.invoices) ? parsed.invoices.map((inv) => ({ ...inv, paymentSlipType: normalizePaymentSlipType(inv?.paymentSlipType), sent: Boolean(inv?.sent), sentAt: String(inv?.sentAt || "") })) : []
+      invoices: Array.isArray(parsed.invoices) ? parsed.invoices.map((inv) => ({ ...inv, paymentSlipType: normalizePaymentSlipType(inv?.paymentSlipType), sent: Boolean(inv?.sent), sentAt: String(inv?.sentAt || "") })) : [],
+      invoiceSequenceByMonth: normalizeInvoiceSequenceByMonth(parsed.invoiceSequenceByMonth)
     };
   } catch {
     return baseState();
@@ -1322,7 +1324,8 @@ function normalizeBackup(parsed) {
     employees: Array.isArray(data?.employees) ? data.employees : [],
     items: (Array.isArray(data?.items) ? data.items : []).map((item) => normalizeItemRecord(item)),
     entries: (Array.isArray(data?.entries) ? data.entries : []).map((entry) => normalizeEntryRecord(entry)),
-    invoices: Array.isArray(data?.invoices) ? data.invoices.map((inv) => ({ ...inv, paymentSlipType: normalizePaymentSlipType(inv?.paymentSlipType), sent: Boolean(inv?.sent), sentAt: String(inv?.sentAt || "") })) : []
+    invoices: Array.isArray(data?.invoices) ? data.invoices.map((inv) => ({ ...inv, paymentSlipType: normalizePaymentSlipType(inv?.paymentSlipType), sent: Boolean(inv?.sent), sentAt: String(inv?.sentAt || "") })) : [],
+    invoiceSequenceByMonth: normalizeInvoiceSequenceByMonth(data?.invoiceSequenceByMonth)
   };
 }
 function wireResetConfirmation() {
@@ -4959,13 +4962,13 @@ function renderInvoiceHtml(invoice) {
       <table>
         <colgroup>
           <col style="width: 5%;" />
-          <col style="width: 11%;" />
-          <col style="width: 33%;" />
+          <col style="width: 13%;" />
+          <col style="width: 34%;" />
           <col style="width: 9%;" />
-          <col style="width: 12%;" />
-          <col style="width: 10%;" />
+          <col style="width: 9%;" />
+          <col style="width: 9%;" />
           <col style="width: 8%;" />
-          <col style="width: 12%;" />
+          <col style="width: 13%;" />
         </colgroup>
         <thead>
           <tr>
@@ -5066,10 +5069,115 @@ function normalizeInvoiceNoToken(value) {
   return ascii || "K";
 }
 
+function getCustomerCodeSource(customer) {
+  if (!customer || typeof customer !== "object") return "K";
+  const parts = [
+    String(customer.lastName || "").trim(),
+    String(customer.firstName || "").trim(),
+    String(customer.company || "").trim()
+  ].filter(Boolean);
+  return parts.join("") || "K";
+}
+
+function padCodeSeed(seed) {
+  const raw = normalizeInvoiceNoToken(seed).replace(/[^A-Z]/g, "");
+  return (raw || "K").padEnd(3, "K");
+}
+
+function buildCustomerShortCodeMap(customers) {
+  const list = Array.isArray(customers) ? customers.slice() : [];
+  list.sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || ""), "de-CH"));
+
+  const used = new Set();
+  const codeMap = new Map();
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  for (const customer of list) {
+    const id = String(customer?.id || "");
+    const seed = padCodeSeed(getCustomerCodeSource(customer));
+    const candidates = [];
+
+    candidates.push(seed.slice(0, 3));
+    for (let i = 1; i <= Math.max(0, seed.length - 3); i += 1) {
+      candidates.push(seed.slice(i, i + 3));
+    }
+
+    const first2 = seed.slice(0, 2);
+    for (const ch of alphabet) candidates.push(`${first2}${ch}`);
+
+    const first1 = seed.slice(0, 1);
+    for (const ch1 of alphabet) {
+      for (const ch2 of alphabet) {
+        candidates.push(`${first1}${ch1}${ch2}`);
+      }
+    }
+
+    let chosen = "KKK";
+    for (const candidate of candidates) {
+      const code = (candidate || "").slice(0, 3).padEnd(3, "K");
+      if (!used.has(code)) {
+        chosen = code;
+        break;
+      }
+    }
+
+    used.add(chosen);
+    codeMap.set(id, chosen);
+  }
+
+  return codeMap;
+}
+
+function getCustomerShortCode(customer) {
+  const id = String(customer?.id || "");
+  if (!id) return padCodeSeed(getCustomerCodeSource(customer)).slice(0, 3);
+  const map = buildCustomerShortCodeMap(state.customers || []);
+  return map.get(id) || padCodeSeed(getCustomerCodeSource(customer)).slice(0, 3);
+}
+
+function normalizeInvoiceSequenceByMonth(value) {
+  if (!value || typeof value !== "object") return {};
+  const normalized = {};
+  for (const [month, raw] of Object.entries(value)) {
+    const key = String(month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    const num = Math.max(0, Math.floor(toNumber(raw, 0)));
+    if (num > 0) normalized[key] = num;
+  }
+  return normalized;
+}
+
+function getExistingMaxSequenceForMonth(month) {
+  const monthKey = String(month || "").trim();
+  if (!monthKey) return 0;
+  let max = 0;
+  for (const inv of state.invoices || []) {
+    if (String(inv?.month || "").trim() !== monthKey) continue;
+    const no = String(inv?.invoiceNo || "");
+    const match = no.match(/-(\d+)$/);
+    if (!match) continue;
+    const n = Math.max(0, Math.floor(toNumber(match[1], 0)));
+    if (n > max) max = n;
+  }
+  return max;
+}
+
+function getNextInvoiceSequenceForMonth(month) {
+  const monthKey = String(month || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) return 1;
+  if (!state.invoiceSequenceByMonth || typeof state.invoiceSequenceByMonth !== "object") {
+    state.invoiceSequenceByMonth = {};
+  }
+  const saved = Math.max(0, Math.floor(toNumber(state.invoiceSequenceByMonth[monthKey], 0)));
+  const existing = getExistingMaxSequenceForMonth(monthKey);
+  const next = Math.max(saved, existing) + 1;
+  state.invoiceSequenceByMonth[monthKey] = next;
+  return next;
+}
+
 function buildInvoiceNo(customer, month) {
-  const baseName = String(customer.lastName || customer.firstName || customer.company || "K");
-  const customerShort = normalizeInvoiceNoToken(baseName).slice(0, 3) || "K";
-  const sequence = String(state.invoices.length + 1).padStart(3, "0");
+  const customerShort = getCustomerShortCode(customer);
+  const sequence = String(getNextInvoiceSequenceForMonth(month)).padStart(3, "0");
   return `${month.replace("-", "")}-${customerShort}-${sequence}`;
 }
 
@@ -6096,6 +6204,11 @@ function copyPanelTableToClipboard(panelEl, mode = "text") {
   }
   return copyTextToClipboard(text);
 }
+
+
+
+
+
 
 
 
