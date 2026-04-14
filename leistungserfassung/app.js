@@ -666,7 +666,7 @@ function wireForms() {
         date: data.date,
         quantity: normalizedQuantity,
         note: data.note?.trim() || "",
-        unitPrice: ansatz,
+        unitPrice,
         costPrice
       };
 
@@ -683,7 +683,7 @@ function wireForms() {
           date: data.date,
           quantity: employeeQuantity,
           note: data.note?.trim() || "",
-          unitPrice: ansatz,
+          unitPrice,
           costPrice
         };
         const merged = mergeEntryIntoState(entry, item);
@@ -3488,7 +3488,7 @@ function renderProductDetailsOverview() {
       customerName,
       employeeName,
       qty,
-      unitPrice: ansatz,
+      unitPrice,
       total
     });
     byProduct.set(productId, group);
@@ -3599,7 +3599,7 @@ function renderCustomerDetailsOverview() {
       note,
       qty,
       unitName,
-      unitPrice: ansatz,
+      unitPrice,
       total
     });
     byCustomer.set(customerId, group);
@@ -4511,6 +4511,7 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
 
 
 
