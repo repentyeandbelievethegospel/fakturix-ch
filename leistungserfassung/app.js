@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = "fakturix_ch_erfassung_data_v2";
+const STORAGE_KEY = "fakturix_ch_erfassung_data_v2";
 const state = loadState();
 let editingCustomerId = null;
 let editingEmployeeId = null;
@@ -532,6 +532,14 @@ function wireForms() {
     refreshRequiredFieldStates();
   });
 
+  entryEmployeesMultiList?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.classList.contains("entry-employee-multi")) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
   entryEmployeesMultiList?.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
@@ -581,9 +589,29 @@ function wireForms() {
     if (!target.classList.contains("entry-employee-split-qty")) return;
     const employeeId = String(target.dataset.employeeId || "").trim();
     if (!employeeId) return;
+    const isPieceUnit = isPieceUnitSelected();
+    const normalized = parseSplitQuantityInputValue(target.value, isPieceUnit);
+    splitEmployeeQuantityMap.set(employeeId, normalized);
+
+    if (isPieceUnit) {
+      target.value = normalized;
+    }
+
+    syncSplitAllocationValidation();
+    syncEntrySubmitButtonState();
+  });
+
+  entryEmployeesSplitDetails?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (!target.classList.contains("entry-employee-split-qty")) return;
+    const employeeId = String(target.dataset.employeeId || "").trim();
+    if (!employeeId) return;
+
     const normalized = parseSplitQuantityInputValue(target.value, isPieceUnitSelected());
     splitEmployeeQuantityMap.set(employeeId, normalized);
     target.value = normalized;
+
     syncSplitAllocationValidation();
     syncEntrySubmitButtonState();
   });
@@ -2294,7 +2322,7 @@ function renderEntrySelects() {
 
 function updateEntryQuantityConstraints() {
   if (!entryQuantityInput) return;
-  const isPieceUnit = isPieceUnitSelected();
+    const isPieceUnit = isPieceUnitSelected();
   if (isPieceUnit) {
     entryQuantityInput.step = "1";
     entryQuantityInput.min = "1";
@@ -2420,7 +2448,7 @@ function renderEntryEmployeesMultiOptions() {
   entryEmployeesMultiList.innerHTML = activeEmployees
     .map((employee) => {
       const checked = selectedBeforeRender.has(String(employee.id || "")) ? " checked" : "";
-      const cardHtml = `<label class="multi-employee-option"><input class="entry-employee-multi" type="checkbox" value="${escapeHtml(employee.id)}"${checked} /> <span>${escapeHtml(getEmployeeDisplay(employee))}</span></label>`;
+      const cardHtml = `<div class="multi-employee-option"><input class="entry-employee-multi" type="checkbox" value="${escapeHtml(employee.id)}"${checked} /> <span>${escapeHtml(getEmployeeDisplay(employee))}</span></div>`;
           return cardHtml;
         })
         .join("");
@@ -2434,6 +2462,7 @@ function renderSplitQuantityInputs() {
   const selectedIds = getSelectedSplitEmployeeIds();
 
   if (!isSplitMode || !selectedIds.length) {
+    if (entryEmployeesMultiRow) entryEmployeesMultiRow.hidden = !isSplitMode;
     entryEmployeesSplitDetails.innerHTML = "";
     entryEmployeesSplitDetails.hidden = true;
     if (entryEmployeesSplitHint) {
@@ -2465,7 +2494,7 @@ function renderSplitQuantityInputs() {
       const value = String(splitEmployeeQuantityMap.get(employeeId) ?? "");
       const step = isPieceUnit ? "1" : "0.01";
       const inputMode = isPieceUnit ? "numeric" : "decimal";
-      const cardHtml = `<div class="multi-employee-split-row"><span class="multi-employee-split-name">${escapeHtml(label)}</span><input class="entry-employee-split-qty" data-employee-id="${escapeHtml(employeeId)}" type="number" min="0" step="${step}" inputmode="${inputMode}" value="${escapeHtml(value)}" /></div>`;
+      const cardHtml = `<div class="multi-employee-split-row"><span class="multi-employee-split-name">${escapeHtml(label)}</span><input class="entry-employee-split-qty" data-employee-id="${escapeHtml(employeeId)}" type="text" inputmode="${inputMode}" autocomplete="off" value="${escapeHtml(value)}" /></div>`;
           return cardHtml;
         })
         .join("");
@@ -2492,15 +2521,32 @@ function getSplitAssignmentsFromInputs(selectedEmployeeIds, mainQuantity, isPiec
   const scale = getSplitQuantityScale(isPieceUnit);
   const mainScaled = Math.round(mainQuantity * scale);
   const sumScaled = assignments.reduce((acc, item) => acc + Math.round(item.quantity * scale), 0);
+  const mainText = formatSplitQuantityValue(mainQuantity, isPieceUnit);
+  const sumText = formatSplitQuantityValue(sumScaled / scale, isPieceUnit);
 
   if (sumScaled !== mainScaled) {
-    return { ok: false, assignments: [], message: "Die Summe der Mitarbeiter-Anteile muss genau der Hauptmenge entsprechen." };
+    const diffScaled = sumScaled - mainScaled;
+    const diffValue = diffScaled / scale;
+    const diffText = `${diffValue >= 0 ? "+" : ""}${formatSplitQuantityValue(diffValue, isPieceUnit)}`;
+    const diffMeaning = diffValue > 0 ? "zu viel" : "zu wenig";
+    const actionText = diffValue > 0
+      ? " -> zugewiesene Menge reduzieren!"
+      : " -> zugewiesene Menge erhöhen!";
+    return {
+      ok: false,
+      assignments: [],
+      message: `Hauptmenge: ${mainText} | Zugewiesen: ${sumText} | Differenz: ${diffText} (${diffMeaning})${actionText}`
+    };
   }
 
   const sum = sumScaled / scale;
-  return { ok: true, assignments, sum };
+  return {
+    ok: true,
+    assignments,
+    sum,
+    message: `Hauptmenge: ${mainText} | Zugewiesen: ${sumText} | Differenz: ${formatSplitQuantityValue(0, isPieceUnit)} (korrekt)`
+  };
 }
-
 function syncSplitAllocationValidation() {
   if (!entryEmployeesSplitDetails || !entryEmployeesMultiRow) return true;
 
@@ -2516,6 +2562,7 @@ function syncSplitAllocationValidation() {
   }
 
   const selectedIds = getSelectedSplitEmployeeIds();
+
   const isPieceUnit = isPieceUnitSelected();
   const mainQuantity = getMainQuantityValue(isPieceUnit);
   const result = getSplitAssignmentsFromInputs(selectedIds, mainQuantity, isPieceUnit);
@@ -2526,12 +2573,11 @@ function syncSplitAllocationValidation() {
   if (entryEmployeesSplitHint) {
     entryEmployeesSplitHint.hidden = false;
     if (result.ok) {
-      const sum = Number(result.sum || 0);
-      entryEmployeesSplitHint.textContent = `Zugewiesen: ${sum} / Hauptmenge: ${mainQuantity} (exakt)`;
+      entryEmployeesSplitHint.textContent = `\u2713 ${result.message || "Aufteilung korrekt"}`;
       entryEmployeesSplitHint.classList.add("split-hint-ok");
       entryEmployeesSplitHint.classList.remove("split-hint-error");
     } else {
-      entryEmployeesSplitHint.textContent = result.message || "Aufteilung prüfen";
+      entryEmployeesSplitHint.textContent = `! ${result.message || "Aufteilung prüfen"}`;
       entryEmployeesSplitHint.classList.add("split-hint-error");
       entryEmployeesSplitHint.classList.remove("split-hint-ok");
     }
@@ -4511,6 +4557,24 @@ function renderExportCleanupResult(plan) {
   exportCleanupResult.hidden = false;
   exportCleanupList.innerHTML = sections.join("");
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
