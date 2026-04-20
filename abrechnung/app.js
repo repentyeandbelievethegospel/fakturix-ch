@@ -26,6 +26,13 @@ const camtImportResultList = document.getElementById("camtImportResultList");
 const camtImportDialog = document.getElementById("camtImportDialog");
 const camtImportDialogList = document.getElementById("camtImportDialogList");
 const camtImportDialogCloseBtn = document.getElementById("camtImportDialogCloseBtn");
+const qrCheckFile = document.getElementById("qrCheckFile");
+const qrCheckBtn = document.getElementById("qrCheckBtn");
+const qrCheckStatus = document.getElementById("qrCheckStatus");
+const qrCheckResult = document.getElementById("qrCheckResult");
+const qrCheckSummary = document.getElementById("qrCheckSummary");
+const qrCheckPayload = document.getElementById("qrCheckPayload");
+const qrCheckIssues = document.getElementById("qrCheckIssues");
 
 const companyForm = document.getElementById("companyForm");
 const companyLogoInput = document.getElementById("companyLogoInput");
@@ -113,6 +120,7 @@ let forcePreviousMonthDefaultsOnInitialRender = true;
 
 wireImport();
 wireCamtImport();
+wireQrValidator();
 wireImportSubTabs();
 wireCompany();
 wireCompanyValidation();
@@ -189,14 +197,16 @@ function baseState() {
       invoiceText: "Vielen Dank für Ihren Auftrag.",
       appendixText: "",
       showSaveButtons: true,
-      mergeSameDayHourlyRows: false
+      mergeSameDayHourlyRows: false,
+      resetMonthlyCounterOnDelete: false
     },
     customers: [],
     employees: [],
     items: [],
     entries: [],
     invoices: [],
-    invoiceSequenceByMonth: {}
+    invoiceSequenceByMonth: {},
+    customerCodeById: {}
   };
 }
 
@@ -294,6 +304,7 @@ function wireBackup() {
       state.items = normalized.items;
       state.entries = normalized.entries;
         state.invoices = normalized.invoices;
+      state.customerCodeById = normalized.customerCodeById;
 
         saveState();
         renderAll();
@@ -358,6 +369,7 @@ function wireBackup() {
       state.invoices = [];
       state.entries = [];
     }
+    resetMonthlyInvoiceSequenceIfConfigured((cleanupResultData.removedInvoices || []).map((inv) => inv?.month));
     const removedMasterData = pruneSoftDeletedMasterDataWithoutDependencies();
 
     saveState();
@@ -440,7 +452,8 @@ function loadState() {
       items: (Array.isArray(parsed.items) ? parsed.items : []).map((item) => normalizeItemRecord(item)),
       entries: (Array.isArray(parsed.entries) ? parsed.entries : []).map((entry) => normalizeEntryRecord(entry)),
       invoices: Array.isArray(parsed.invoices) ? parsed.invoices.map((inv) => ({ ...inv, paymentSlipType: normalizePaymentSlipType(inv?.paymentSlipType), sent: Boolean(inv?.sent), sentAt: String(inv?.sentAt || "") })) : [],
-      invoiceSequenceByMonth: normalizeInvoiceSequenceByMonth(parsed.invoiceSequenceByMonth)
+      invoiceSequenceByMonth: normalizeInvoiceSequenceByMonth(parsed.invoiceSequenceByMonth),
+      customerCodeById: normalizeCustomerCodeById(parsed.customerCodeById)
     };
   } catch {
     return baseState();
@@ -829,6 +842,267 @@ function wireCamtImport() {
   });
 }
 
+function wireQrValidator() {
+  if (!qrCheckFile || !qrCheckBtn || !qrCheckStatus) return;
+
+  const syncQrCheckButton = () => {
+    qrCheckBtn.disabled = !(qrCheckFile.files && qrCheckFile.files.length);
+    refreshImportBackupValidationStates();
+  };
+
+  const clearQrCheckResult = () => {
+    if (qrCheckResult) qrCheckResult.hidden = true;
+    if (qrCheckSummary) qrCheckSummary.textContent = "";
+    if (qrCheckPayload) qrCheckPayload.textContent = "";
+    if (qrCheckIssues) qrCheckIssues.innerHTML = "";
+  };
+
+  qrCheckFile.addEventListener("change", () => {
+    syncQrCheckButton();
+    qrCheckStatus.textContent = "";
+    clearQrCheckResult();
+  });
+
+  syncQrCheckButton();
+
+  qrCheckBtn.addEventListener("click", async () => {
+    const file = qrCheckFile.files?.[0];
+    if (!file) {
+      qrCheckStatus.textContent = "Bitte zuerst eine Datei auswählen.";
+      clearQrCheckResult();
+      return;
+    }
+
+    qrCheckStatus.textContent = "QR-Code wird geprüft...";
+    clearQrCheckResult();
+
+    try {
+      const payload = await extractQrPayloadFromFile(file);
+      if (!payload) throw new Error("Kein QR-Code in der Datei gefunden.");
+
+      const lines = String(payload).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+      const report = analyzeSwissQrPayload(lines);
+
+      if (qrCheckResult) qrCheckResult.hidden = false;
+      if (qrCheckSummary) {
+        qrCheckSummary.textContent = `${file.name}: ${report.summary}`;
+      }
+      if (qrCheckPayload) {
+        qrCheckPayload.textContent = lines
+          .map((line, idx) => `${String(idx + 1).padStart(2, "0")}  ${line}`)
+          .join("\n");
+      }
+      if (qrCheckIssues) {
+        const issueRows = report.issues.length
+          ? report.issues
+          : [{ kind: "success", text: "QR-Inhalt wirkt formal plausibel (keine offensichtlichen Formatfehler)." }];
+        const issuesHtml = issueRows
+          .map((issue) => {
+            const iconClass = issue.kind === "error"
+              ? "icon-error"
+              : issue.kind === "warning"
+                ? "icon-question"
+                : "icon-success";
+            const icon = issue.kind === "error" ? "✖" : issue.kind === "warning" ? "?" : "✔";
+            return `<article class="cleanup-result-row"><span class="import-icon ${iconClass}" aria-hidden="true">${icon}</span>${escapeHtml(issue.text)}</article>`;
+          })
+          .join("");
+        qrCheckIssues.innerHTML = issuesHtml + renderSwissQrLineHelp(lines);
+      }
+
+      qrCheckStatus.textContent = "QR-Prüfung abgeschlossen.";
+    } catch (error) {
+      const reason = error?.message ? String(error.message) : "Unbekannter Fehler";
+      qrCheckStatus.textContent = `QR-Prüfung fehlgeschlagen: ${reason}`;
+      clearQrCheckResult();
+    }
+  });
+}
+
+function analyzeSwissQrPayload(lines) {
+  const safe = Array.isArray(lines) ? lines.map((x) => String(x ?? "")) : [];
+  const issues = [];
+
+  const type = safe[0] || "";
+  const version = safe[1] || "";
+  const amount = safe[18] || "";
+  const currency = safe[19] || "";
+  const referenceType = safe[27] || "";
+  const message = safe[28] || "";
+  const additionalInfo = safe[31] || "";
+
+  if (type !== "SPC") {
+    issues.push({ kind: "error", text: `Zeile 1 sollte SPC sein (aktuell: ${type || "leer"}).` });
+  }
+  if (version && version !== "0200") {
+    issues.push({ kind: "warning", text: `Zeile 2 Version ist ${version}; erwartet ist 0200.` });
+  }
+  if (!currency) {
+    issues.push({ kind: "warning", text: "Waehrung (Zeile 20) ist leer." });
+  }
+  if (!amount) {
+    issues.push({ kind: "warning", text: "Betrag (Zeile 19) ist leer." });
+  }
+  if (!message && !additionalInfo) {
+    issues.push({ kind: "warning", text: "Mitteilung fehlt (weder Zeile 29 noch Zeile 32 befüllt)." });
+  }
+  if (additionalInfo && !additionalInfo.startsWith("//S1")) {
+    issues.push({ kind: "warning", text: "Zeile 32 ist befüllt, beginnt aber nicht mit //S1 (Swiss QR Standard-Hinweis)." });
+  }
+
+  const summaryParts = [
+    `Zeilen: ${safe.length}`,
+    `Typ: ${type || "-"}`,
+    `Ref-Typ: ${referenceType || "-"}`,
+    `Betrag: ${amount || "-"} ${currency || ""}`.trim()
+  ];
+
+  return { summary: summaryParts.join(" | "), issues };
+}
+
+function renderSwissQrLineHelp(lines) {
+  const safe = Array.isArray(lines) ? lines.map((x) => String(x ?? "")) : [];
+  const labels = {
+    1: "QR-Typ (SPC)",
+    2: "Version (z.B. 0200)",
+    3: "Coding Type (1 = UTF-8)",
+    4: "Konto / Zahlbar an (IBAN)",
+    5: "Kreditor: Adresstyp (S/K)",
+    6: "Kreditor: Name",
+    7: "Kreditor: Strasse / Adresse",
+    8: "Kreditor: Hausnummer / Adresszusatz",
+    9: "Kreditor: PLZ",
+    10: "Kreditor: Ort",
+    11: "Kreditor: Land (CH/LI)",
+    12: "Ultimate Creditor: Adresstyp",
+    13: "Ultimate Creditor: Name",
+    14: "Ultimate Creditor: Strasse",
+    15: "Ultimate Creditor: Hausnummer",
+    16: "Ultimate Creditor: PLZ",
+    17: "Ultimate Creditor: Ort",
+    18: "Ultimate Creditor: Land",
+    19: "Betrag",
+    20: "Währung (CHF/EUR)",
+    21: "Debitor: Adresstyp (S/K)",
+    22: "Debitor: Name",
+    23: "Debitor: Strasse / Adresse",
+    24: "Debitor: Hausnummer / Adresszusatz",
+    25: "Debitor: PLZ",
+    26: "Debitor: Ort",
+    27: "Debitor: Land",
+    28: "Referenztyp (QRR/SCOR/NON)",
+    29: "Referenz",
+    30: "Unstrukturierte Mitteilung",
+    31: "Trailer (EPD)",
+    32: "Zusatzinformationen (z.B. //S1...)"
+  };
+
+  const rows = safe.map((value, idx) => {
+    const lineNo = idx + 1;
+    const label = labels[lineNo] || "Weitere Datenzeile";
+    const shown = value.trim() ? value : "(leer)";
+    return `<article class="cleanup-result-row"><strong>Zeile ${lineNo}:</strong> ${escapeHtml(label)}<br><code>${escapeHtml(shown)}</code></article>`;
+  }).join("");
+
+  if (!rows) return "";
+  return `
+    <details class="qr-line-help">
+      <summary>Zeilen-Erklärung anzeigen</summary>
+      <div class="cleanup-result-list">${rows}</div>
+    </details>
+  `;
+}
+async function extractQrPayloadFromFile(file) {
+  const isPdf = /application\/pdf/i.test(String(file.type || "")) || /\.pdf$/i.test(String(file.name || ""));
+  if (isPdf) return extractQrPayloadFromPdf(file);
+  return extractQrPayloadFromImage(file);
+}
+
+async function extractQrPayloadFromPdf(file) {
+  const pdfLib = globalThis.pdfjsLib;
+  if (!pdfLib || typeof pdfLib.getDocument !== "function") {
+    throw new Error("PDF-Bibliothek ist nicht verfuegbar.");
+  }
+
+  if (pdfLib.GlobalWorkerOptions) {
+    pdfLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const doc = await pdfLib.getDocument({ data: bytes }).promise;
+
+  for (let pageNo = 1; pageNo <= doc.numPages; pageNo += 1) {
+    const page = await doc.getPage(pageNo);
+    const scales = [2, 3];
+    for (const scale of scales) {
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) continue;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const value = await readQrFromCanvas(canvas);
+      if (value) return value;
+    }
+  }
+
+  throw new Error("Kein QR-Code in der PDF gefunden.");
+}
+
+async function extractQrPayloadFromImage(file) {
+  const image = await loadImageFromFile(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, image.naturalWidth || image.width || 1);
+  canvas.height = Math.max(1, image.naturalHeight || image.height || 1);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("Canvas-Kontext nicht verfuegbar.");
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const value = await readQrFromCanvas(canvas);
+  if (value) return value;
+
+  throw new Error("Kein QR-Code im Bild gefunden.");
+}
+
+function loadImageFromFile(file) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Bild konnte nicht gelesen werden."));
+      img.src = dataUrl;
+    } catch {
+      reject(new Error("Bild konnte nicht geladen werden."));
+    }
+  });
+}
+
+async function readQrFromCanvas(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return "";
+
+  if (typeof globalThis.jsQR === "function") {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const result = globalThis.jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: "attemptBoth" });
+    if (result?.data) return String(result.data);
+  }
+
+  if ("BarcodeDetector" in globalThis) {
+    try {
+      const detector = new globalThis.BarcodeDetector({ formats: ["qr_code"] });
+      const found = await detector.detect(canvas);
+      if (Array.isArray(found) && found[0]?.rawValue) {
+        return String(found[0].rawValue);
+      }
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
+}
 function renderCamtImportResult(fileName, results) {
   if (!camtImportResult || !camtImportResultList) return;
   const safe = Array.isArray(results) ? results : [];
@@ -1310,6 +1584,7 @@ function mergeImports(imports) {
   }
 
   state.customers = [...customerMap.values()];
+  state.customerCodeById = ensureCustomerCodeMap(state.customers, state.customerCodeById);
   state.employees = [...employeeMap.values()];
   state.items = [...itemMap.values()];
   state.entries = [...entryMap.values()];
@@ -1325,7 +1600,8 @@ function normalizeBackup(parsed) {
     items: (Array.isArray(data?.items) ? data.items : []).map((item) => normalizeItemRecord(item)),
     entries: (Array.isArray(data?.entries) ? data.entries : []).map((entry) => normalizeEntryRecord(entry)),
     invoices: Array.isArray(data?.invoices) ? data.invoices.map((inv) => ({ ...inv, paymentSlipType: normalizePaymentSlipType(inv?.paymentSlipType), sent: Boolean(inv?.sent), sentAt: String(inv?.sentAt || "") })) : [],
-    invoiceSequenceByMonth: normalizeInvoiceSequenceByMonth(data?.invoiceSequenceByMonth)
+    invoiceSequenceByMonth: normalizeInvoiceSequenceByMonth(data?.invoiceSequenceByMonth),
+    customerCodeById: normalizeCustomerCodeById(data?.customerCodeById)
   };
 }
 function wireResetConfirmation() {
@@ -1366,6 +1642,7 @@ function wireCompany() {
     state.company.appendixText = String(data.appendixText || "").trim();
     state.company.showSaveButtons = Boolean(companyForm.showSaveButtons?.checked);
     state.company.mergeSameDayHourlyRows = Boolean(companyForm.mergeSameDayHourlyRows?.checked);
+    state.company.resetMonthlyCounterOnDelete = Boolean(companyForm.resetMonthlyCounterOnDelete?.checked);
 
     saveState();
     companyStatus.textContent = "Firmendaten gespeichert.";
@@ -1679,6 +1956,7 @@ function wireInvoiceList() {
     if (!confirm(`Sind Sie wirklich sicher?\n\nBetroffen:\n${listText}`)) return;
 
     state.invoices = state.invoices.filter((inv) => !pendingDeleteAllInvoiceIds.includes(inv.id));
+    resetMonthlyInvoiceSequenceIfConfigured(affected.map((inv) => inv?.month));
     saveState();
     renderInvoiceList();
     setPreviewHtml("");
@@ -1758,6 +2036,7 @@ function wireInvoiceList() {
     if (action === "delete") {
       if (!confirm(`Rechnung ${invoice.invoiceNo} wirklich löschen?`)) return;
       state.invoices = state.invoices.filter((i) => i.id !== invoice.id);
+      resetMonthlyInvoiceSequenceIfConfigured([invoice.month]);
       saveState();
       renderInvoiceList();
       if (currentInvoiceHtml && invoicePreview.innerHTML.includes(invoice.invoiceNo)) {
@@ -2286,6 +2565,7 @@ function renderCompanyForm() {
   if (companyForm.appendixText) companyForm.appendixText.value = state.company.appendixText || "";
   if (companyForm.showSaveButtons) companyForm.showSaveButtons.checked = state.company.showSaveButtons !== false;
   if (companyForm.mergeSameDayHourlyRows) companyForm.mergeSameDayHourlyRows.checked = Boolean(state.company.mergeSameDayHourlyRows);
+  if (companyForm.resetMonthlyCounterOnDelete) companyForm.resetMonthlyCounterOnDelete.checked = Boolean(state.company.resetMonthlyCounterOnDelete);
   setCompanyLogoPreview(String(state.company.logoDataUrl || "").trim(), state.company.logoDataUrl ? "Gespeichertes Logo." : "Noch kein Logo hochgeladen.");
   refreshCompanyValidationStates();
 }
@@ -4916,7 +5196,7 @@ function renderInvoiceHtml(invoice) {
   let paymentSlipSection = "";
   if (paymentSlipType === "swiss_qr") {
     const swissQrBillSvg = renderSwissQrBillSvg(invoice, c, company);
-    paymentSlipSection = `<section class="qr-page">${swissQrBillSvg}</section>`;
+    paymentSlipSection = `<section class="qr-page qr-page-swiss">${swissQrBillSvg}</section>`;
   } else if (paymentSlipType === "appendix") {
     const appendixText = String(company.appendixText || "").trim();
     paymentSlipSection = `
@@ -4962,13 +5242,13 @@ function renderInvoiceHtml(invoice) {
       <table>
         <colgroup>
           <col style="width: 5%;" />
-          <col style="width: 13%;" />
-          <col style="width: 34%;" />
+          <col style="width: 11%;" />
+          <col style="width: 33%;" />
           <col style="width: 9%;" />
-          <col style="width: 9%;" />
-          <col style="width: 9%;" />
+          <col style="width: 12%;" />
+          <col style="width: 10%;" />
           <col style="width: 8%;" />
-          <col style="width: 13%;" />
+          <col style="width: 12%;" />
         </colgroup>
         <thead>
           <tr>
@@ -5069,6 +5349,17 @@ function normalizeInvoiceNoToken(value) {
   return ascii || "K";
 }
 
+
+function normalizeCustomerCodeById(value) {
+  if (!value || typeof value !== "object") return {};
+  const out = {};
+  for (const [idRaw, codeRaw] of Object.entries(value)) {
+    const id = String(idRaw || "").trim();
+    if (!id) continue;
+    out[id] = String(codeRaw || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3).padEnd(3, "K");
+  }
+  return out;
+}
 function getCustomerCodeSource(customer) {
   if (!customer || typeof customer !== "object") return "K";
   const parts = [
@@ -5128,11 +5419,24 @@ function buildCustomerShortCodeMap(customers) {
   return codeMap;
 }
 
+
+function ensureCustomerCodeMap(customers, existingMap) {
+  const normalized = normalizeCustomerCodeById(existingMap);
+  const fullMap = buildCustomerShortCodeMap(customers || []);
+  for (const [id, code] of fullMap.entries()) {
+    if (!normalized[id]) normalized[id] = code;
+  }
+  const validIds = new Set((Array.isArray(customers) ? customers : []).map((c) => String(c?.id || "").trim()).filter(Boolean));
+  for (const id of Object.keys(normalized)) {
+    if (!validIds.has(id)) delete normalized[id];
+  }
+  return normalized;
+}
 function getCustomerShortCode(customer) {
-  const id = String(customer?.id || "");
+  const id = String(customer?.id || "").trim();
   if (!id) return padCodeSeed(getCustomerCodeSource(customer)).slice(0, 3);
-  const map = buildCustomerShortCodeMap(state.customers || []);
-  return map.get(id) || padCodeSeed(getCustomerCodeSource(customer)).slice(0, 3);
+  state.customerCodeById = ensureCustomerCodeMap(state.customers || [], state.customerCodeById);
+  return state.customerCodeById[id] || padCodeSeed(getCustomerCodeSource(customer)).slice(0, 3);
 }
 
 function normalizeInvoiceSequenceByMonth(value) {
@@ -5175,6 +5479,24 @@ function getNextInvoiceSequenceForMonth(month) {
   return next;
 }
 
+
+function resetMonthlyInvoiceSequenceIfConfigured(affectedMonths) {
+  if (!Boolean(state?.company?.resetMonthlyCounterOnDelete)) return;
+  if (!state.invoiceSequenceByMonth || typeof state.invoiceSequenceByMonth !== "object") return;
+
+  const monthSet = new Set(
+    (Array.isArray(affectedMonths) ? affectedMonths : [])
+      .map((m) => String(m || "").trim())
+      .filter((m) => /^\d{4}-\d{2}$/.test(m))
+  );
+
+  if (!monthSet.size) return;
+
+  monthSet.forEach((monthKey) => {
+    const stillHasInvoices = (state.invoices || []).some((inv) => String(inv?.month || "").trim() === monthKey);
+    if (!stillHasInvoices) delete state.invoiceSequenceByMonth[monthKey];
+  });
+}
 function buildInvoiceNo(customer, month) {
   const customerShort = getCustomerShortCode(customer);
   const sequence = String(getNextInvoiceSequenceForMonth(month)).padStart(3, "0");
@@ -5613,30 +5935,34 @@ function renderSwissQrBillSvg(invoice, customer, company) {
     }
 
     const iban = String(company.iban || "").replace(/\s+/g, "");
-    const qrIban = isQrIban(iban);
+    const creditorStreetParts = splitStreetAndHouseNumber(company.street);
+    const debtorStreetParts = splitStreetAndHouseNumber(customer.street);
     const data = {
       creditor: {
         account: iban,
         name: String(company.name || ""),
-        address: String(company.street || ""),
+        address: creditorStreetParts.address,
+        ...(creditorStreetParts.buildingNumber ? { buildingNumber: creditorStreetParts.buildingNumber } : {}),
         zip: String(company.zip || ""),
         city: String(company.city || ""),
         country: "CH"
       },
       amount: toNumber(invoice.grandTotal, 0),
       currency: normalizeQrCurrencyCode(invoice.currency || company.currency),
-      reference: qrIban ? buildQrrReference(invoice.invoiceNo) : undefined,
+      reference: buildScorReference(invoice.invoiceNo),
       debtor: {
         name: String(formatCustomerName(customer) || ""),
-        address: String(customer.street || ""),
+        address: debtorStreetParts.address,
+        ...(debtorStreetParts.buildingNumber ? { buildingNumber: debtorStreetParts.buildingNumber } : {}),
         zip: String(customer.zip || ""),
         city: String(customer.city || ""),
         country: "CH"
       },
-      additionalInformation: `Rechnung ${invoice.invoiceNo}`
+      message: `Rechnung ${invoice.invoiceNo}`,
+      additionalInformation: ""
     };
 
-    const validationErrors = validateSwissQrData(data, qrIban);
+    const validationErrors = validateSwissQrData(data);
     if (validationErrors.length) {
       const items = validationErrors.map((e) => `<li>${escapeHtml(e)}</li>`).join("");
       return `
@@ -5668,6 +5994,28 @@ function renderSwissQrBillSvg(invoice, customer, company) {
   }
 }
 
+function splitStreetAndHouseNumber(streetRaw) {
+  const text = String(streetRaw || "").trim().replace(/\s+/g, " ");
+  if (!text) return { address: "", buildingNumber: undefined };
+
+  const tailNumber = text.match(/^(.*\S)\s+(\d+[A-Za-z]?(?:[/-]\d+[A-Za-z]?)?)$/);
+  if (tailNumber) {
+    return {
+      address: String(tailNumber[1] || "").trim(),
+      buildingNumber: String(tailNumber[2] || "").trim()
+    };
+  }
+
+  const headNumber = text.match(/^(\d+[A-Za-z]?(?:[/-]\d+[A-Za-z]?)?)\s+(.*\S)$/);
+  if (headNumber) {
+    return {
+      address: String(headNumber[2] || "").trim(),
+      buildingNumber: String(headNumber[1] || "").trim()
+    };
+  }
+
+  return { address: text, buildingNumber: undefined };
+}
 function isQrIban(iban) {
   const cleaned = String(iban || "").replace(/\s+/g, "");
   if (cleaned.length < 9) return false;
@@ -5691,7 +6039,7 @@ function qrrChecksum(base26) {
   return String((10 - carry) % 10);
 }
 
-function validateSwissQrData(data, qrIban) {
+function validateSwissQrData(data) {
   const errors = [];
 
   const iban = String(data?.creditor?.account || "");
@@ -5729,26 +6077,54 @@ function validateSwissQrData(data, qrIban) {
   const info = String(data?.additionalInformation || "");
   if (info.length > 140) errors.push("Mitteilung darf max. 140 Zeichen haben.");
 
-  const reference = String(data?.reference || "");
-  if (qrIban) {
-    if (!reference) {
-      errors.push("Bei QR-IBAN ist eine QRR-Referenz zwingend.");
-    } else if (!/^\d{27}$/.test(reference)) {
-      errors.push("QRR-Referenz muss 27-stellig numerisch sein.");
-    } else {
-      const base = reference.slice(0, 26);
-      const check = reference.slice(26);
-      if (qrrChecksum(base) !== check) {
-        errors.push("QRR-Referenz Prüfziffer ist ungültig.");
-      }
-    }
-  } else if (reference) {
-    errors.push("Bei normaler IBAN darf keine QR-Referenz verwendet werden.");
+  const reference = String(data?.reference || "").replace(/\s+/g, "").toUpperCase();
+  if (!reference) {
+    errors.push("SCOR-Referenz fehlt.");
+  } else if (!/^RF\d{2}[A-Z0-9]{1,21}$/.test(reference)) {
+    errors.push("SCOR-Referenz Format ist ungültig (RF..).");
+  } else if (!isValidScorReference(reference)) {
+    errors.push("SCOR-Referenz Prüfziffer ist ungültig.");
   }
 
   return errors;
 }
 
+
+function buildScorReference(seed) {
+  const raw = String(seed || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const base = (raw.slice(-21) || "1");
+  const check = computeScorCheckDigits(base);
+  return `RF${check}${base}`;
+}
+
+function computeScorCheckDigits(base) {
+  const prepared = `${String(base || "").toUpperCase()}RF00`;
+  const remainder = mod97AlphaNumeric(prepared);
+  const check = 98 - remainder;
+  return String(check).padStart(2, "0");
+}
+
+function isValidScorReference(reference) {
+  const ref = String(reference || "").toUpperCase().replace(/\s+/g, "");
+  if (!/^RF\d{2}[A-Z0-9]{1,21}$/.test(ref)) return false;
+  const rearranged = ref.slice(4) + ref.slice(0, 4);
+  return mod97AlphaNumeric(rearranged) === 1;
+}
+
+function mod97AlphaNumeric(value) {
+  const input = String(value || "").toUpperCase();
+  let numeric = "";
+  for (const ch of input) {
+    if (/[0-9]/.test(ch)) numeric += ch;
+    else if (/[A-Z]/.test(ch)) numeric += String(ch.charCodeAt(0) - 55);
+    else return Number.NaN;
+  }
+  let remainder = 0;
+  for (const digit of numeric) {
+    remainder = (remainder * 10 + Number(digit)) % 97;
+  }
+  return remainder;
+}
 function isValidIban(ibanRaw) {
   const iban = String(ibanRaw || "").replace(/\s+/g, "").toUpperCase();
   if (iban.length < 15 || iban.length > 34) return false;
@@ -6204,6 +6580,35 @@ function copyPanelTableToClipboard(panelEl, mode = "text") {
   }
   return copyTextToClipboard(text);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

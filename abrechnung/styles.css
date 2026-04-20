@@ -362,11 +362,6 @@ th, td {
   font-size: 13px;
   word-break: break-word;
 }
-
-.invoice th,
-.invoice td {
-  vertical-align: top;
-}
 .invoice th.nowrap,
 .invoice td.nowrap {
   white-space: nowrap;
@@ -421,6 +416,23 @@ td.num { word-break: normal; white-space: nowrap; }
   margin-top: 10mm;
   page-break-before: always;
   break-before: page;
+}
+
+.qr-page-swiss .qr-lib-wrap {
+  position: relative;
+  border-top: 1.75px dashed #000;
+}
+
+.qr-page-swiss .qr-lib-wrap::before {
+  content: "✂";
+  position: absolute;
+  top: -0.45rem;
+  left: 6mm;
+  color: #6b7280;
+  background: #fff;
+  padding: 0 0.18rem;
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 .qr-lib-wrap {
@@ -1878,4 +1890,39 @@ button:disabled {
     min-width: 480px;
   }
 }
+
+
+.qr-payload {
+  margin: 0.55rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+
+
+.qr-line-help {
+  margin-top: 0.6rem;
+}
+
+.qr-line-help > summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.qr-line-help[open] > summary {
+  margin-bottom: 0.65rem;
+}
+
+
+
+
+
 
