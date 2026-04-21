@@ -1682,7 +1682,7 @@ function wireCompanyValidation() {
 }
 
 function wireImportBackupValidation() {
-  const fields = [importFiles, camtImportFile, backupImportFile, invoiceCleanupMonths, invoiceCleanupConfirmCheckbox, resetConfirmCheckbox].filter(Boolean);
+  const fields = [importFiles, camtImportFile, qrCheckFile, backupImportFile, invoiceCleanupMonths, invoiceCleanupConfirmCheckbox, resetConfirmCheckbox].filter(Boolean);
   fields.forEach((field) => {
     const refresh = () => updateSimpleFieldValidationState(field);
     field.addEventListener("change", refresh);
@@ -1693,7 +1693,7 @@ function wireImportBackupValidation() {
 }
 
 function refreshImportBackupValidationStates() {
-  const fields = [importFiles, camtImportFile, backupImportFile, invoiceCleanupMonths, invoiceCleanupConfirmCheckbox, resetConfirmCheckbox].filter(Boolean);
+  const fields = [importFiles, camtImportFile, qrCheckFile, backupImportFile, invoiceCleanupMonths, invoiceCleanupConfirmCheckbox, resetConfirmCheckbox].filter(Boolean);
   fields.forEach((field) => updateSimpleFieldValidationState(field));
 }
 
