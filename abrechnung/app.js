@@ -60,6 +60,8 @@ const invoiceFilterCustomerList = document.getElementById("invoiceFilterCustomer
 const invoiceFilterStatus = document.getElementById("invoiceFilterStatus");
 const invoiceFilterSentStatus = document.getElementById("invoiceFilterSentStatus");
 const invoiceFilterClearBtn = document.getElementById("invoiceFilterClearBtn");
+const invoicePrintAllNoSlipBtn = document.getElementById("invoicePrintAllNoSlipBtn");
+const invoicePrintAllSlipMode = document.getElementById("invoicePrintAllSlipMode");
 const invoiceDeleteAllBtn = document.getElementById("invoiceDeleteAllBtn");
 const invoiceDeleteAllDialog = document.getElementById("invoiceDeleteAllDialog");
 const invoiceDeleteAllList = document.getElementById("invoiceDeleteAllList");
@@ -1905,6 +1907,23 @@ function wireInvoiceList() {
     if (invoiceFilterSentStatus) invoiceFilterSentStatus.value = "all";
     renderInvoiceList();
   });
+
+  if (invoicePrintAllNoSlipBtn) {
+    invoicePrintAllNoSlipBtn.addEventListener("click", () => {
+      const visible = getFilteredInvoices();
+      if (!visible.length) {
+        billingStatus.textContent = "Keine Rechnungen für den gewählten Filter vorhanden.";
+        return;
+      }
+      const withSlip = String(invoicePrintAllSlipMode?.value || "with") === "with";
+      const batchHtml = buildBatchInvoiceHtml(visible, withSlip);
+      const monthPart = String(invoiceFilterMonth?.value || "").trim();
+      const title = monthPart
+        ? `Rechnungen-${withSlip ? "mit" : "ohne"}-Einzahlungsschein-${monthPart}`
+        : `Rechnungen-${withSlip ? "mit" : "ohne"}-Einzahlungsschein`;
+      openPrintWindow(batchHtml, title);
+    });
+  }
 
   if (invoiceDeleteAllBtn) {
     invoiceDeleteAllBtn.addEventListener("click", () => {
@@ -5279,6 +5298,20 @@ function renderInvoiceHtml(invoice) {
     </section>
   `;
 }
+
+function buildBatchInvoiceHtml(invoices, withPaymentSlip = true) {
+  return (invoices || [])
+    .map((invoice, idx, arr) => {
+      const normalizedInvoice = withPaymentSlip
+        ? invoice
+        : { ...invoice, paymentSlipType: "none" };
+      const html = renderInvoiceHtml(normalizedInvoice);
+      if (idx >= arr.length - 1) return html;
+      return `${html}<div style="break-after: page; page-break-after: always;"></div>`;
+    })
+    .join("");
+}
+
 function buildSwissQrPayload({
   iban,
   currency,

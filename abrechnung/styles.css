@@ -503,8 +503,26 @@ td.num { word-break: normal; white-space: nowrap; }
   align-items: flex-end;
 }
 
+.invoice-print-all-actions {
+  margin-top: 0.8rem;
+  align-items: flex-end;
+}
+
+.invoice-print-all-actions button,
+.invoice-print-all-actions select {
+  height: 2.4rem;
+  box-sizing: border-box;
+}
+
 #invoiceFilterClearBtn {
   align-self: flex-end;
+  background: #e5e7eb;
+  border: 1px solid #9ca3af;
+  color: #111827;
+  font-weight: 700;
+}
+
+#invoicePrintAllNoSlipBtn {
   background: #e5e7eb;
   border: 1px solid #9ca3af;
   color: #111827;

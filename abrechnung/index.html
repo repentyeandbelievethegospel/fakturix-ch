@@ -185,7 +185,16 @@
               </select>
             </label>
             <button id="invoiceFilterClearBtn" type="button">Filter löschen</button>
-            <button id="invoiceDeleteAllBtn" type="button" class="danger">Alle Rechnungen löschen</button>
+          </div>
+          <div class="actions invoice-print-all-actions">
+            <label>Druckmodus
+              <select id="invoicePrintAllSlipMode">
+                <option value="with" selected>mit Einzahlungsschein</option>
+                <option value="without">ohne Einzahlungsschein</option>
+              </select>
+            </label>
+            <button id="invoicePrintAllNoSlipBtn" type="button">Alle drucken</button>
+            <button id="invoiceDeleteAllBtn" type="button" class="danger">Alle löschen</button>
           </div>
           <div style="height: 0.8rem;"></div>
           <div id="invoiceList" class="invoice-list"></div>
