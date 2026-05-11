@@ -522,7 +522,8 @@ td.num { word-break: normal; white-space: nowrap; }
   font-weight: 700;
 }
 
-#invoicePrintAllNoSlipBtn {
+#invoicePrintAllNoSlipBtn,
+#invoicePrintAllIndividualBtn {
   background: #e5e7eb;
   border: 1px solid #9ca3af;
   color: #111827;

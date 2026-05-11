@@ -61,6 +61,7 @@ const invoiceFilterStatus = document.getElementById("invoiceFilterStatus");
 const invoiceFilterSentStatus = document.getElementById("invoiceFilterSentStatus");
 const invoiceFilterClearBtn = document.getElementById("invoiceFilterClearBtn");
 const invoicePrintAllNoSlipBtn = document.getElementById("invoicePrintAllNoSlipBtn");
+const invoicePrintAllIndividualBtn = document.getElementById("invoicePrintAllIndividualBtn");
 const invoicePrintAllSlipMode = document.getElementById("invoicePrintAllSlipMode");
 const invoiceDeleteAllBtn = document.getElementById("invoiceDeleteAllBtn");
 const invoiceDeleteAllDialog = document.getElementById("invoiceDeleteAllDialog");
@@ -1916,12 +1917,33 @@ function wireInvoiceList() {
         return;
       }
       const withSlip = String(invoicePrintAllSlipMode?.value || "with") === "with";
-      const batchHtml = buildBatchInvoiceHtml(visible, withSlip);
       const monthPart = String(invoiceFilterMonth?.value || "").trim();
       const title = monthPart
         ? `Rechnungen-${withSlip ? "mit" : "ohne"}-Einzahlungsschein-${monthPart}`
         : `Rechnungen-${withSlip ? "mit" : "ohne"}-Einzahlungsschein`;
+      const batchHtml = buildBatchInvoiceHtml(visible, withSlip);
       openPrintWindow(batchHtml, title);
+    });
+  }
+
+  if (invoicePrintAllIndividualBtn) {
+    invoicePrintAllIndividualBtn.addEventListener("click", () => {
+      const visible = getFilteredInvoices();
+      if (!visible.length) {
+        billingStatus.textContent = "Keine Rechnungen für den gewählten Filter vorhanden.";
+        return;
+      }
+      const withSlip = String(invoicePrintAllSlipMode?.value || "with") === "with";
+      const printJobs = buildInvoicePrintJobs(visible, withSlip);
+      const monthPart = String(invoiceFilterMonth?.value || "").trim();
+      const title = monthPart
+        ? `Rechnungen-${withSlip ? "mit" : "ohne"}-Einzahlungsschein-${monthPart}`
+        : `Rechnungen-${withSlip ? "mit" : "ohne"}-Einzahlungsschein`;
+      if (printJobs.length === 1) {
+        openPrintWindow(printJobs[0].html, printJobs[0].title);
+        return;
+      }
+      openSequentialPrintWindow(printJobs, title);
     });
   }
 
@@ -5312,6 +5334,18 @@ function buildBatchInvoiceHtml(invoices, withPaymentSlip = true) {
     .join("");
 }
 
+function buildInvoicePrintJobs(invoices, withPaymentSlip = true) {
+  return (invoices || []).map((invoice) => {
+    const normalizedInvoice = withPaymentSlip
+      ? invoice
+      : { ...invoice, paymentSlipType: "none" };
+    return {
+      title: buildInvoicePdfFileName(invoice),
+      html: renderInvoiceHtml(normalizedInvoice)
+    };
+  });
+}
+
 function buildSwissQrPayload({
   iban,
   currency,
@@ -5715,6 +5749,26 @@ function openPrintWindow(invoiceHtml, suggestedTitle = "Rechnung", options = {})
   win.document.close();
 }
 
+function openSequentialPrintWindow(printJobs, suggestedTitle = "Rechnungen") {
+  const jobs = Array.isArray(printJobs) ? printJobs.filter((job) => job?.html) : [];
+  if (!jobs.length) {
+    billingStatus.textContent = "Keine Rechnungen für den Sammeldruck vorhanden.";
+    return;
+  }
+
+  const win = window.open("", "_blank");
+  if (!win) {
+    billingStatus.textContent = "Popup wurde blockiert. Bitte Popups erlauben und erneut drucken.";
+    return;
+  }
+
+  const title = sanitizeDocumentTitle(suggestedTitle);
+  win.document.open();
+  win.document.write(buildSequentialPrintDocumentHtml(jobs, title));
+  win.document.close();
+  billingStatus.textContent = `${jobs.length} Rechnungen werden einzeln gedruckt, damit die Seitenzahl pro Rechnung neu startet.`;
+}
+
 async function saveInvoiceAsPdf(invoiceHtml, suggestedTitle = "Rechnung", options = {}) {
   const title = sanitizeDocumentTitle(suggestedTitle);
   const orientation = options?.orientation === "landscape" ? "landscape" : "portrait";
@@ -5907,6 +5961,89 @@ function buildPrintDocumentHtml(invoiceHtml, title, autoPrint, closeAfterPrint =
       </body>
     </html>
   `;
+}
+
+function buildSequentialPrintDocumentHtml(printJobs, title) {
+  const jobs = (printJobs || []).map((job, index) => ({
+    title: sanitizeDocumentTitle(job?.title || `${title}-${index + 1}`),
+    html: String(job?.html || "")
+  }));
+  const jobsJson = escapeJsonForScript(jobs);
+  return `
+    <!doctype html>
+    <html lang="de-CH">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${escapeHtml(title)}</title>
+        <base href="${window.location.href}" />
+        <link rel="stylesheet" href="styles.css" />
+      </head>
+      <body class="print-only-body">
+        <article id="sequentialPrintHost" class="invoice-preview print-only-preview"></article>
+        <script>
+          const printJobs = ${jobsJson};
+          const host = document.getElementById("sequentialPrintHost");
+          let activeIndex = 0;
+          let printPending = false;
+
+          function waitForAssets() {
+            const images = Array.from(document.images || []);
+            const imagePromises = images.map((img) => {
+              if (img.complete) return Promise.resolve();
+              return new Promise((resolve) => {
+                img.addEventListener("load", resolve, { once: true });
+                img.addEventListener("error", resolve, { once: true });
+              });
+            });
+            const fontsReady = document.fonts && document.fonts.ready
+              ? document.fonts.ready.catch(() => undefined)
+              : Promise.resolve();
+            return Promise.all([...imagePromises, fontsReady]);
+          }
+
+          function printNextJob() {
+            if (activeIndex >= printJobs.length) {
+              window.close();
+              return;
+            }
+
+            const job = printJobs[activeIndex];
+            document.title = job.title || "Rechnung";
+            host.innerHTML = job.html || "";
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                waitForAssets().then(() => {
+                  printPending = true;
+                  window.print();
+                });
+              });
+            });
+          }
+
+          window.addEventListener("afterprint", () => {
+            if (!printPending) return;
+            printPending = false;
+            activeIndex += 1;
+            setTimeout(printNextJob, 250);
+          });
+
+          window.addEventListener("load", () => {
+            setTimeout(printNextJob, 250);
+          });
+        <\/script>
+      </body>
+    </html>
+  `;
+}
+
+function escapeJsonForScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 
