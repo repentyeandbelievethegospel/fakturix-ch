@@ -200,6 +200,8 @@ function baseState() {
       invoiceText: "Vielen Dank für Ihren Auftrag.",
       appendixText: "",
       showSaveButtons: true,
+      showInvoiceSentStatusControls: true,
+      showInvoicePaidStatusControls: true,
       mergeSameDayHourlyRows: false,
       resetMonthlyCounterOnDelete: false
     },
@@ -634,6 +636,46 @@ function wireCamtImport() {
     camtImportBtn.disabled = !(camtImportFile.files && camtImportFile.files.length);
     refreshImportBackupValidationStates();
   };
+  const handleConfirmOverpayClick = (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest("button[data-action='confirm-overpay'][data-id]");
+    if (!button) return;
+    const actionId = String(button.dataset.id || "");
+    const action = camtPendingOverpayActions.get(actionId);
+    if (!action) return;
+    const invoice = state.invoices.find((i) => i.id === action.invoiceId);
+    if (!invoice) {
+      camtImportStatus.textContent = "Rechnung für diese Aktion wurde nicht gefunden.";
+      camtPendingOverpayActions.delete(actionId);
+    } else if (invoice.paid) {
+      camtImportStatus.textContent = `Rechnung ${invoice.invoiceNo || "(ohne Nr.)"} ist bereits bezahlt.`;
+      camtPendingOverpayActions.delete(actionId);
+    } else {
+      markInvoicePaidFromBooking(invoice, action.booking, action.importMeta);
+      saveState();
+      renderInvoiceList();
+      if (currentInvoiceHtml) setPreviewHtml(currentInvoiceHtml);
+      camtImportStatus.textContent = `Rechnung ${invoice.invoiceNo || "(ohne Nr.)"} wurde trotz Mehrbetrag als bezahlt markiert.`;
+      camtPendingOverpayActions.delete(actionId);
+    }
+    camtLastResultRows = camtLastResultRows.map((row) =>
+      row.actionId === actionId
+        ? {
+            ...row,
+            matched: true,
+            resultType: "success",
+            pendingAction: false,
+            matchType: "Referenz + Mehrbetrag (bestätigt)",
+            reason: "",
+            invoiceNo: row.invoiceNo || invoice?.invoiceNo || "(ohne Nr.)"
+          }
+        : row
+    );
+    renderCamtImportResult(camtLastResultFileName, camtLastResultRows);
+    if (camtImportDialogList && camtImportDialog && !camtImportDialog.hidden) {
+      camtImportDialogList.innerHTML = camtImportResultList?.innerHTML || "";
+    }
+  };
   camtImportFile.addEventListener("change", syncCamtImportButton);
   syncCamtImportButton();
   if (camtImportDialogCloseBtn) {
@@ -645,42 +687,10 @@ function wireCamtImport() {
     });
   }
   if (camtImportResultList) {
-    camtImportResultList.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-action='confirm-overpay'][data-id]");
-      if (!button) return;
-      const actionId = String(button.dataset.id || "");
-      const action = camtPendingOverpayActions.get(actionId);
-      if (!action) return;
-      const invoice = state.invoices.find((i) => i.id === action.invoiceId);
-      if (!invoice) {
-        camtImportStatus.textContent = "Rechnung für diese Aktion wurde nicht gefunden.";
-        camtPendingOverpayActions.delete(actionId);
-      } else if (invoice.paid) {
-        camtImportStatus.textContent = `Rechnung ${invoice.invoiceNo || "(ohne Nr.)"} ist bereits bezahlt.`;
-        camtPendingOverpayActions.delete(actionId);
-      } else {
-        markInvoicePaidFromBooking(invoice, action.booking, action.importMeta);
-        saveState();
-        renderInvoiceList();
-        if (currentInvoiceHtml) setPreviewHtml(currentInvoiceHtml);
-        camtImportStatus.textContent = `Rechnung ${invoice.invoiceNo || "(ohne Nr.)"} wurde trotz Mehrbetrag als bezahlt markiert.`;
-        camtPendingOverpayActions.delete(actionId);
-      }
-      camtLastResultRows = camtLastResultRows.map((row) =>
-        row.actionId === actionId
-          ? {
-              ...row,
-              matched: true,
-              resultType: "success",
-              pendingAction: false,
-              matchType: "Referenz + Mehrbetrag (bestätigt)",
-              reason: "",
-              invoiceNo: row.invoiceNo || invoice?.invoiceNo || "(ohne Nr.)"
-            }
-          : row
-      );
-      renderCamtImportResult(camtLastResultFileName, camtLastResultRows);
-    });
+    camtImportResultList.addEventListener("click", handleConfirmOverpayClick);
+  }
+  if (camtImportDialogList) {
+    camtImportDialogList.addEventListener("click", handleConfirmOverpayClick);
   }
   camtImportBtn.addEventListener("click", async () => {
     const file = camtImportFile.files?.[0];
@@ -1497,6 +1507,49 @@ function renderInvoiceList() {
       const sentMetaHtml = sent
         ? `<small>Versendet am: ${escapeHtml(formatDateCH(inv.sentAt || inv.createdAt || ""))}</small>`
         : `<small>Noch nicht versendet</small>`;
+      const showSentControls = shouldShowInvoiceSentStatusControls();
+      const showPaidControls = shouldShowInvoicePaidStatusControls();
+      const statusCardsHtml = showSentControls || showPaidControls
+        ? `
+            <div class="status-cards">
+              ${showSentControls ? `
+                <section class="status-card">
+                  <div class="status-card-title">Versandstatus</div>
+                  <span class="pill ${sentClass}">
+                    <strong>${sentText}</strong>
+                    ${sentMetaHtml}
+                  </span>
+                </section>
+              ` : ""}
+              ${showPaidControls ? `
+                <section class="status-card">
+                  <div class="status-card-title">Zahlungsstatus</div>
+                  <span class="pill ${paidClass}">
+                    <strong>${paidText}</strong>
+                    ${paidMetaHtml}
+                  </span>
+                </section>
+              ` : ""}
+            </div>
+          `
+        : "";
+      const statusActionCount = (showSentControls ? 1 : 0) + (showPaidControls ? 1 : 0);
+      const statusActionsHtml = statusActionCount
+        ? `
+              <div class="status-action-pair ${statusActionCount === 1 ? "single" : ""}">
+                ${showSentControls ? `
+                  <button type="button" class="${inv.sent ? "" : "primary"}" data-action="toggle-sent" data-id="${escapeHtml(inv.id)}">
+                    ${inv.sent ? "Als nicht versendet markieren" : "Als versendet markieren"}
+                  </button>
+                ` : ""}
+                ${showPaidControls ? `
+                  <button type="button" class="${inv.paid ? "" : "primary"}" data-action="toggle-paid" data-id="${escapeHtml(inv.id)}">
+                    ${inv.paid ? "Als offen markieren" : "Als bezahlt markieren"}
+                  </button>
+                ` : ""}
+              </div>
+          `
+        : "";
       return `
         <article class="invoice-row">
           <div class="top">
@@ -1509,22 +1562,7 @@ function renderInvoiceList() {
               <small>${escapeHtml(customerName)} | Monat ${escapeHtml(formatMonthCH(inv.month))}</small><br>
               <small>Fällig: ${escapeHtml(formatDateCH(inv.dueDate))} | Total: ${formatCurrency(inv.grandTotal)}</small>
             </div>
-            <div class="status-cards">
-              <section class="status-card">
-                <div class="status-card-title">Versandstatus</div>
-                <span class="pill ${sentClass}">
-                  <strong>${sentText}</strong>
-                  ${sentMetaHtml}
-                </span>
-              </section>
-              <section class="status-card">
-                <div class="status-card-title">Zahlungsstatus</div>
-                <span class="pill ${paidClass}">
-                  <strong>${paidText}</strong>
-                  ${paidMetaHtml}
-                </span>
-              </section>
-            </div>
+            ${statusCardsHtml}
           </div>
             <div class="actions">
               <div class="primary-actions">
@@ -1533,14 +1571,7 @@ function renderInvoiceList() {
                 ${shouldShowSaveButtons() ? `<button type="button" data-action="save" data-id="${escapeHtml(inv.id)}">Speichern</button>` : ""}
                 <button type="button" class="danger" data-action="delete" data-id="${escapeHtml(inv.id)}">Löschen</button>
               </div>
-              <div class="status-action-pair">
-                <button type="button" class="${inv.sent ? "" : "primary"}" data-action="toggle-sent" data-id="${escapeHtml(inv.id)}">
-                  ${inv.sent ? "Als nicht versendet markieren" : "Als versendet markieren"}
-                </button>
-                <button type="button" class="${inv.paid ? "" : "primary"}" data-action="toggle-paid" data-id="${escapeHtml(inv.id)}">
-                  ${inv.paid ? "Als offen markieren" : "Als bezahlt markieren"}
-                </button>
-              </div>
+              ${statusActionsHtml}
             </div>
         </article>
       `;
@@ -1644,12 +1675,15 @@ function wireCompany() {
     state.company.invoiceText = String(data.invoiceText || "").trim();
     state.company.appendixText = String(data.appendixText || "").trim();
     state.company.showSaveButtons = Boolean(companyForm.showSaveButtons?.checked);
+    state.company.showInvoiceSentStatusControls = Boolean(companyForm.showInvoiceSentStatusControls?.checked);
+    state.company.showInvoicePaidStatusControls = Boolean(companyForm.showInvoicePaidStatusControls?.checked);
     state.company.mergeSameDayHourlyRows = Boolean(companyForm.mergeSameDayHourlyRows?.checked);
     state.company.resetMonthlyCounterOnDelete = Boolean(companyForm.resetMonthlyCounterOnDelete?.checked);
 
     saveState();
     companyStatus.textContent = "Firmendaten gespeichert.";
     refreshCompanyValidationStates();
+    renderInvoiceList();
   });
 }
 
@@ -2605,6 +2639,8 @@ function renderCompanyForm() {
   companyForm.invoiceText.value = state.company.invoiceText || "";
   if (companyForm.appendixText) companyForm.appendixText.value = state.company.appendixText || "";
   if (companyForm.showSaveButtons) companyForm.showSaveButtons.checked = state.company.showSaveButtons !== false;
+  if (companyForm.showInvoiceSentStatusControls) companyForm.showInvoiceSentStatusControls.checked = state.company.showInvoiceSentStatusControls !== false;
+  if (companyForm.showInvoicePaidStatusControls) companyForm.showInvoicePaidStatusControls.checked = state.company.showInvoicePaidStatusControls !== false;
   if (companyForm.mergeSameDayHourlyRows) companyForm.mergeSameDayHourlyRows.checked = Boolean(state.company.mergeSameDayHourlyRows);
   if (companyForm.resetMonthlyCounterOnDelete) companyForm.resetMonthlyCounterOnDelete.checked = Boolean(state.company.resetMonthlyCounterOnDelete);
   setCompanyLogoPreview(String(state.company.logoDataUrl || "").trim(), state.company.logoDataUrl ? "Gespeichertes Logo." : "Noch kein Logo hochgeladen.");
@@ -2871,6 +2907,14 @@ function renderHoursReport() {
 
 function shouldShowSaveButtons() {
   return state.company?.showSaveButtons !== false;
+}
+
+function shouldShowInvoiceSentStatusControls() {
+  return state.company?.showInvoiceSentStatusControls !== false;
+}
+
+function shouldShowInvoicePaidStatusControls() {
+  return state.company?.showInvoicePaidStatusControls !== false;
 }
 
 function renderReportActions(previewAction, saveAction, csvAction, copyTextAction = "", copyHtmlAction = "") {
@@ -5211,9 +5255,8 @@ function renderInvoiceHtml(invoice) {
   const currencyCode = normalizeCurrencyCode(company.currency);
   const vatDisplayNo = String(company.vatNo || "").trim();
 
-  const rowsHtml = (invoice.rows || [])
-    .map(
-      (r) => `
+  const invoiceRows = invoice.rows || [];
+  const renderInvoiceRowHtml = (r) => `
           <tr>
             <td>${escapeHtml(formatWeekdayShortCH(r.date))}</td>
             <td>${escapeHtml(formatDateCH(r.date))}</td>
@@ -5224,9 +5267,57 @@ function renderInvoiceHtml(invoice) {
             <td class="nowrap">${escapeHtml(currencyCode)}</td>
             <td class="num">${formatAmountCH(r.total)}</td>
           </tr>
-        `
-    )
-    .join("");
+        `;
+  const regularRowsHtml = invoiceRows.slice(0, -1).map(renderInvoiceRowHtml).join("");
+  const closingRowHtml = invoiceRows.length ? renderInvoiceRowHtml(invoiceRows[invoiceRows.length - 1]) : "";
+  const invoiceColgroupHtml = `
+        <colgroup>
+          <col style="width: 5%;" />
+          <col style="width: 11%;" />
+          <col style="width: 33%;" />
+          <col style="width: 9%;" />
+          <col style="width: 12%;" />
+          <col style="width: 10%;" />
+          <col style="width: 8%;" />
+          <col style="width: 12%;" />
+        </colgroup>
+  `;
+  const invoiceTableHeadHtml = `
+        <thead>
+          <tr>
+            <th>Tag</th>
+            <th>Datum</th>
+            <th>Leistung</th>
+            <th class="num">Menge</th>
+            <th>Einheit</th>
+            <th class="num">Ansatz</th>
+            <th class="nowrap">Währung</th>
+            <th class="num">Total</th>
+          </tr>
+        </thead>
+  `;
+  const regularTbodyHtml = regularRowsHtml ? `<tbody>${regularRowsHtml}</tbody>` : "";
+  const closingTbodyHtml = `
+        <tbody class="invoice-closing-tbody">
+          ${closingRowHtml}
+          <tr class="invoice-summary-row">
+            <td colspan="8">
+              <div class="totals">
+                <p><span>Zwischentotal</span><span>${formatCurrency(invoice.subtotal)}</span></p>
+                <p><span>MWST ${toNumber(invoice.vatRate, 0).toFixed(2)}%</span><span>${formatCurrency(invoice.vatAmount)}</span></p>
+                <p class="grand"><span>Total</span><span>${formatCurrency(invoice.grandTotal)}</span></p>
+              </div>
+            </td>
+          </tr>
+          <tr class="invoice-text-row">
+            <td colspan="8">
+              <section class="invoice-text-block">
+                <p>${escapeHtml(company.invoiceText || "")}</p>
+              </section>
+            </td>
+          </tr>
+        </tbody>
+  `;
 
   const customerPersonName = `${c.firstName || ""} ${c.lastName || ""}`.trim();
   const customerAddressNameLines = [];
@@ -5280,41 +5371,12 @@ function renderInvoiceHtml(invoice) {
         | Fällig am: ${escapeHtml(formatDateCH(invoice.dueDate))}
       </p>
 
-      <table>
-        <colgroup>
-          <col style="width: 5%;" />
-          <col style="width: 11%;" />
-          <col style="width: 33%;" />
-          <col style="width: 9%;" />
-          <col style="width: 12%;" />
-          <col style="width: 10%;" />
-          <col style="width: 8%;" />
-          <col style="width: 12%;" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Tag</th>
-            <th>Datum</th>
-            <th>Leistung</th>
-            <th class="num">Menge</th>
-            <th>Einheit</th>
-            <th class="num">Ansatz</th>
-            <th class="nowrap">Währung</th>
-            <th class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
+      <table class="invoice-table">
+        ${invoiceColgroupHtml}
+        ${invoiceTableHeadHtml}
+        ${regularTbodyHtml}
+        ${closingTbodyHtml}
       </table>
-
-      <div class="totals">
-        <p><span>Zwischentotal</span><span>${formatCurrency(invoice.subtotal)}</span></p>
-        <p><span>MWST ${toNumber(invoice.vatRate, 0).toFixed(2)}%</span><span>${formatCurrency(invoice.vatAmount)}</span></p>
-        <p class="grand"><span>Total</span><span>${formatCurrency(invoice.grandTotal)}</span></p>
-      </div>
-
-      <section class="invoice-text-block">
-        <p>${escapeHtml(company.invoiceText || "")}</p>
-      </section>
 
       ${paymentSlipSection}
     </section>
@@ -5934,10 +5996,39 @@ function buildPrintDocumentHtml(invoiceHtml, title, autoPrint, closeAfterPrint =
   const printScript = autoPrint
     ? `
         <script>
-          window.onload = () => {
-            window.print();
-            ${closeAfterPrint ? "window.onafterprint = () => window.close();" : ""}
-          };
+          let printStarted = false;
+
+          function waitForAssets() {
+            const images = Array.from(document.images || []);
+            const imagePromises = images.map((img) => {
+              if (img.complete) return Promise.resolve();
+              return new Promise((resolve) => {
+                img.addEventListener("load", resolve, { once: true });
+                img.addEventListener("error", resolve, { once: true });
+              });
+            });
+            const fontsReady = document.fonts && document.fonts.ready
+              ? document.fonts.ready.catch(() => undefined)
+              : Promise.resolve();
+            return Promise.all([...imagePromises, fontsReady]);
+          }
+
+          function startPrint() {
+            if (printStarted) return;
+            printStarted = true;
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                waitForAssets().then(() => {
+                  setTimeout(() => window.print(), 250);
+                });
+              });
+            });
+          }
+
+          ${closeAfterPrint ? "window.addEventListener(\"afterprint\", () => setTimeout(() => window.close(), 250));" : ""}
+          window.addEventListener("load", () => {
+            setTimeout(startPrint, 250);
+          });
         <\/script>
       `
     : "";

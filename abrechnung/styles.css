@@ -370,6 +370,27 @@ th, td {
 td.num, th.num { text-align: right; }
 td.num { word-break: normal; white-space: nowrap; }
 
+.invoice-table thead {
+  display: table-header-group;
+}
+
+.invoice table tr,
+.invoice-closing-tbody,
+.invoice-closing-tbody tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.invoice-summary-row > td,
+.invoice-text-row > td {
+  border-bottom: 0;
+  padding: 0;
+}
+
+.invoice-summary-row .totals {
+  margin-top: 5mm;
+}
+
 .money {
   display: inline-grid;
   grid-template-columns: 2.6em minmax(7ch, max-content);
@@ -1493,6 +1514,11 @@ button:disabled {
   justify-content: space-between;
   width: calc(var(--status-control-width) * 2 + 0.45rem);
   min-width: calc(var(--status-control-width) * 2 + 0.45rem);
+}
+
+.status-action-pair.single {
+  width: var(--status-control-width);
+  min-width: var(--status-control-width);
 }
 
 
